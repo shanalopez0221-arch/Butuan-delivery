@@ -6,55 +6,15 @@
 <title>Butuan Delivery</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
-<style>
-:root{--bg:#f2f6f5;--card:#fff;--ink:#12201f;--mute:#5b6e6c;--teal:#0e4f4a;--sun:#f2b01e;--line:#cfdcda;--onteal:#fff}
-@media (prefers-color-scheme:dark){:root{--bg:#0d1a19;--card:#152826;--ink:#e8f1ef;--mute:#9bb2af;--teal:#2c8f86;--line:#2a4440}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45}
-header{background:var(--teal);color:var(--onteal);padding:22px 18px 50px}
-header h1{margin:0;font-size:1.9rem;font-weight:800;letter-spacing:-.02em}
-nav{display:flex;gap:8px;margin-top:14px}
-nav button{flex:1;padding:10px;border:1px solid rgba(255,255,255,.5);border-radius:10px;background:transparent;color:var(--onteal);font:inherit;font-weight:600;cursor:pointer}
-nav button.on{background:var(--sun);color:#12201f;border-color:var(--sun)}
-main{max-width:540px;margin:-30px auto 0;padding:0 14px 40px}
-.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:12px}
-label{display:block;font-weight:600;margin:12px 0 6px}
-input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px}
-input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid var(--sun);outline-offset:1px}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.fare{margin:16px 0 4px;padding:14px;border-radius:12px;background:var(--sun);color:#12201f;display:flex;justify-content:space-between;align-items:baseline}
-.fare b{font-size:1.9rem;font-weight:800}
-.hint{color:var(--mute);font-size:.85rem;margin:6px 0 0}
-.go{width:100%;margin-top:14px;padding:14px;border:0;border-radius:12px;background:var(--teal);color:var(--onteal);font:inherit;font-weight:800;font-size:1.05rem;cursor:pointer}
-.sm{padding:10px 14px;border:0;border-radius:10px;background:var(--teal);color:var(--onteal);font:inherit;font-weight:600;cursor:pointer;margin-top:8px}
-.st{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--sun);color:#12201f;font-weight:600;font-size:.85rem}
-.job b{font-size:1.05rem}
-.job p{margin:4px 0}
-.err{color:#b3261e;font-weight:600}
-a{color:inherit}
-.proof{width:100%;max-height:260px;object-fit:cover;border-radius:10px;margin:6px 0 0}
-input[type=checkbox]{width:auto;margin-right:8px;margin-top:4px}
-.chk{display:flex;align-items:flex-start;font-weight:400;font-size:.9rem}
-.hide{display:none}
-.pin{width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--teal);background:transparent;color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
-#mapbox{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-#mapbox.hide{display:none}
-#map{flex:1;min-height:0}
-#mapbar{padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--card)}
-#mapbar p{grid-column:1/-1;margin:0;font-weight:600}
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
   <h1>Butuan Delivery</h1>
-  <nav>
-    <button data-v="book" class="on">Book</button>
-    <button data-v="rider">Rider</button>
-    <button data-v="admin">Admin</button>
-  </nav>
+  <p>Book a rider for parcels, food, and documents anywhere in Butuan City.</p>
 </header>
 <main>
-<section id="book">
+
   <form id="signup" class="box hide" novalidate>
     <b>Create a customer account</b>
     <p class="hint">We check a valid ID before your first booking.</p>
@@ -96,7 +56,6 @@ input[type=checkbox]{width:auto;margin-right:8px;margin-top:4px}
     <p id="msg" role="status"></p>
   </form>
   <div id="mine" class="hide"></div>
-</section>
 <form id="login" class="box hide" novalidate>
   <b>Sign in</b>
   <label for="em">Email</label><input id="em" type="email" autocomplete="username">
@@ -105,8 +64,6 @@ input[type=checkbox]{width:auto;margin-right:8px;margin-top:4px}
   <p id="lmsg" class="err" role="status"></p>
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
-<section id="rider" class="hide"><div id="rjobs"></div></section>
-<section id="admin" class="hide"><div id="aids"></div><div id="ajobs"></div></section>
 </main>
 <div id="mapbox" class="hide">
   <div id="map"></div>
@@ -121,30 +78,9 @@ input[type=checkbox]{width:auto;margin-right:8px;margin-top:4px}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="shared.js"></script>
 <script>
-// ===== Edit these =====
-var CONFIG = {
-  adminEmail: "shanalopez0221@gmail.com",   // the only account that can see all bookings
-  baseFare: 0, includedKm: 0, perKm: 50,   // fare = km x perKm (+ item size fee)
-  firebase: {
-    apiKey: "AIzaSyCWyH0IcE6uZgzsToisEeom2l8SkbQjYa0",
-    authDomain: "butuan-delivery.firebaseapp.com",
-    projectId: "butuan-delivery",
-    storageBucket: "butuan-delivery.firebasestorage.app",
-    messagingSenderId: "662503139863",
-    appId: "1:662503139863:web:f400a69cf41be256ff4a52"
-  }
-};
-// ======================
-firebase.initializeApp(CONFIG.firebase);
-var db = firebase.firestore();
-var col = db.collection("bookings");
-var auth = firebase.auth();
-var $ = function(i){ return document.getElementById(i); };
-var LABEL = { new: "Waiting for rider", assigned: "Rider assigned", picked_up: "Picked up", delivered: "Delivered" };
-var user = null, view = "book", unsubs = {};
-
-function el(tag, text, cls){ var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+var cust = null, loaded = false, busy = false;
 function fare(){
   var km = Math.max(1, parseFloat($("km").value) || 1);
   return Math.round(CONFIG.baseFare + Math.max(0, km - CONFIG.includedKm) * CONFIG.perKm + parseInt($("size").value, 10));
@@ -153,63 +89,28 @@ function render(){ $("fare").textContent = "₱" + fare(); }
 ["km","size"].forEach(function(i){ $(i).addEventListener("input", render); });
 render();
 
-// ---- accounts, tabs, photos ----
-var cust = null, loaded = false, busy = false;
-function isAdmin(){ return user && user.email.toLowerCase() === CONFIG.adminEmail.toLowerCase(); }
-function stop(k){ if (unsubs[k]){ unsubs[k](); unsubs[k] = null; } }
+
 function role(){ if (!user) return "none"; if (isAdmin()) return "admin"; if (busy || !loaded) return "loading"; return cust ? "customer" : "staff"; }
-function show(v){ view = v; refresh(); }
 function prefill(){ if (cust){ if (!$("name").value) $("name").value = cust.name; if (!$("phone").value) $("phone").value = cust.phone; } }
 function refresh(){
-  var r = role(), inBook = view === "book", ok = r === "customer" && cust.status === "approved";
-  ["book","rider","admin"].forEach(function(x){ $(x).classList.toggle("hide", x !== view || (x !== "book" && !user)); });
-  $("login").classList.toggle("hide", !!user);
-  $("signup").classList.toggle("hide", !!user || !inBook);
-  $("who").classList.toggle("hide", !user);
-  document.querySelectorAll("nav button").forEach(function(b){ b.classList.toggle("on", b.dataset.v === view); });
-  var note = !inBook ? "" : r === "staff" || r === "admin" ? "This is a staff account. Use a separate customer account to book." :
+  var r = role(), ok = r === "customer" && cust.status === "approved";
+  $("signup").classList.toggle("hide", !!user);
+  var note = r === "staff" || r === "admin" ? "This is a staff account. Use a separate customer account to book." :
     r === "customer" && cust.status === "pending" ? "Your ID is being checked. You can book as soon as the admin approves it." :
     r === "customer" && cust.status === "rejected" ? "Your ID was not approved. Send a clearer photo of a valid ID." : "";
   $("cst").textContent = note;
   $("cstate").classList.toggle("hide", !note);
   $("redo").classList.toggle("hide", !(r === "customer" && cust.status === "rejected"));
-  $("f").classList.toggle("hide", !(inBook && ok));
-  $("mine").classList.toggle("hide", !(inBook && r === "customer"));
+  $("f").classList.toggle("hide", !ok);
+  $("mine").classList.toggle("hide", r !== "customer");
   if (ok) prefill();
-  if (!user){ ["admin","ids","rider","mine"].forEach(stop); return; }
-  $("whotxt").textContent = "Signed in as " + user.email + ". ";
   if (r === "customer") watchMine(); else stop("mine");
-  if (view === "admin"){
-    if (isAdmin()){ watchAdmin(); watchIds(); } else { $("ajobs").textContent = "This account is not the admin."; $("ajobs").className = "box err"; }
-  }
-  if (view === "rider") watchRider();
 }
-document.querySelectorAll("nav button").forEach(function(b){ b.onclick = function(){ show(b.dataset.v); }; });
-auth.onAuthStateChanged(function(u){
-  ["admin","ids","rider","mine","me"].forEach(stop);
-  user = u; cust = null; loaded = false;
+startAuth(function(u){
+  cust = null; loaded = false;
   if (u && !isAdmin()) unsubs.me = db.collection("users").doc(u.uid).onSnapshot(function(d){ cust = d.exists ? d.data() : null; loaded = true; refresh(); }, function(){ loaded = true; refresh(); });
   refresh();
 });
-$("login").addEventListener("submit", function(e){
-  e.preventDefault(); $("lmsg").textContent = "";
-  auth.signInWithEmailAndPassword($("em").value.trim(), $("pw").value).then(function(){ $("pw").value = ""; })
-    .catch(function(){ $("lmsg").textContent = "Wrong email or password."; });
-});
-$("out").onclick = function(){ auth.signOut(); };
-
-function squeeze(file, max, q){
-  return new Promise(function(ok, no){
-    var img = new Image(), u = URL.createObjectURL(file);
-    img.onload = function(){
-      var k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas");
-      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
-      ok(c.toDataURL("image/jpeg", q));
-    };
-    img.onerror = no; img.src = u;
-  });
-}
 $("signup").addEventListener("submit", function(e){
   e.preventDefault();
   var g = function(i){ return $(i).value.trim(); }, m = $("smsg"), file = $("sid").files[0], photo;
@@ -227,17 +128,6 @@ $("rsend").onclick = function(){
   squeeze(f, 1000, 0.7).then(function(url){ return db.collection("users").doc(user.uid).update({ idPhoto: url, status: "pending" }); })
     .catch(function(){ $("cst").textContent = "Could not send. Try again."; });
 };
-function proofBtn(text, field, status, d){
-  var l = el("label", null, "sm"), t = el("span", text), f = el("input");
-  l.style.display = "inline-block"; f.type = "file"; f.accept = "image/*"; f.setAttribute("capture", "environment"); f.hidden = true;
-  f.onchange = function(){
-    if (!f.files[0]) return; t.textContent = "Uploading…";
-    squeeze(f.files[0], 720, 0.6).then(function(url){ var u = { status: status }; u[field] = url; return d.ref.update(u); })
-      .catch(function(){ t.textContent = "Upload failed. Tap to try again."; });
-  };
-  l.appendChild(t); l.appendChild(f); return l;
-}
-function ts(d){ var t = d.data().createdAt; return t ? t.toMillis() : Infinity; }
 function watchMine(){
   if (unsubs.mine) return;
   var box = $("mine");
@@ -246,26 +136,6 @@ function watchMine(){
     draw(box, { forEach: function(fn){ docs.forEach(fn); } }, "customer", "No bookings yet.");
   }, fail(box));
 }
-function watchIds(){
-  if (unsubs.ids) return;
-  var box = $("aids");
-  unsubs.ids = db.collection("users").where("status", "==", "pending").onSnapshot(function(sn){
-    box.textContent = "";
-    sn.forEach(function(d){
-      var u = d.data(), c = el("div", null, "box job");
-      c.appendChild(el("b", "ID check: " + u.name));
-      c.appendChild(el("p", u.phone + " · " + u.email));
-      c.appendChild(el("p", u.idType, "hint"));
-      var im = el("img", null, "proof"); im.src = u.idPhoto; im.alt = "ID photo of " + u.name; c.appendChild(im);
-      var ok = el("button", "Approve", "sm"), no = el("button", "Reject", "sm"); ok.type = "button"; no.type = "button";
-      ok.onclick = function(){ d.ref.update({ status: "approved" }); };
-      no.onclick = function(){ d.ref.update({ status: "rejected" }); };
-      c.appendChild(ok); c.appendChild(document.createTextNode(" ")); c.appendChild(no); box.appendChild(c);
-    });
-    if (!box.firstChild) box.appendChild(el("p", "No IDs waiting for review.", "box hint"));
-  }, fail(box));
-}
-
 // ---- map pins ----
 var pins = { pu: null, do: null }, map = null, marker = null, target = null, temp = null;
 var BUTUAN = [8.9475, 125.5406];
@@ -349,52 +219,6 @@ $("f").addEventListener("submit", function(e){
     $("msg").textContent = ""; $("f").reset(); pins = { pu: null, do: null }; auto = { pu: "", do: "" }; $("pu-ok").textContent = ""; $("do-ok").textContent = ""; $("kmnote").textContent = ""; render(); prefill(); $("msg").textContent = "Booking sent. Track it below.";
   }).catch(function(){ $("msg").className = "err"; $("msg").textContent = "Could not send. Check your internet and try again."; });
 });
-// ---- job cards (admin and rider) ----
-function card(d, mode){
-  var b = d.data(), c = el("div", null, "box job");
-  c.appendChild(el("b", b.pickup + " to " + b.dropoff));
-  var s = el("p"); s.appendChild(el("span", LABEL[b.status] || b.status, "st")); c.appendChild(s);
-  c.appendChild(el("p", "₱" + b.fare + " · " + b.pay + " · " + b.size + " · " + b.km + " km"));
-  var ph = el("p"); var a = el("a", b.name + " " + b.phone); a.href = "tel:" + b.phone; ph.appendChild(a); c.appendChild(ph);
-  var url = null;
-  if (b.puLat != null && b.doLat != null) url = "https://www.google.com/maps/dir/?api=1&origin=" + b.puLat + "," + b.puLng + "&destination=" + b.doLat + "," + b.doLng;
-  else if (b.puLat != null) url = "https://www.google.com/maps/search/?api=1&query=" + b.puLat + "," + b.puLng;
-  if (url){ var mp = el("p"), ma = el("a", b.doLat != null ? "Open route in Maps" : "Open pickup in Maps"); ma.href = url; ma.target = "_blank"; ma.rel = "noopener"; mp.appendChild(ma); c.appendChild(mp); }
-  [["pickupPhoto", "Pickup proof"], ["deliveryPhoto", "Delivery proof"]].forEach(function(p){
-    if (b[p[0]]){ c.appendChild(el("p", p[1], "hint")); var im = el("img", null, "proof"); im.src = b[p[0]]; im.alt = p[1]; c.appendChild(im); }
-  });
-  if (b.note) c.appendChild(el("p", "Note: " + b.note, "hint"));
-  if (mode === "admin"){
-    if (b.status === "new" || b.status === "assigned"){
-      var i = el("input"); i.type = "email"; i.placeholder = "Rider email"; i.value = b.riderEmail || ""; c.appendChild(i);
-      var g = el("button", b.riderEmail ? "Change rider" : "Assign rider", "sm"); g.type = "button";
-      g.onclick = function(){ var r = i.value.trim().toLowerCase(); if (r) d.ref.update({ riderEmail: r, status: "assigned" }); };
-      c.appendChild(g);
-    } else if (b.riderEmail) c.appendChild(el("p", "Rider: " + b.riderEmail));
-  } else if (mode === "rider") {
-    if (b.status === "assigned") c.appendChild(proofBtn("Take pickup photo", "pickupPhoto", "picked_up", d));
-    else if (b.status === "picked_up") c.appendChild(proofBtn("Take delivery photo", "deliveryPhoto", "delivered", d));
-  }
-  return c;
-}
-function draw(box, snap, mode, empty){
-  box.textContent = ""; box.classList.remove("box", "err");
-  var n = 0;
-  snap.forEach(function(d){ if (mode === "rider" && d.data().status === "delivered") return; box.appendChild(card(d, mode)); n++; });
-  if (!n) box.appendChild(el("p", empty, "box hint"));
-}
-function fail(box){ return function(){ box.textContent = "Could not load jobs. Check your internet and Firebase rules."; box.classList.add("box", "err"); }; }
-
-function watchAdmin(){
-  if (unsubs.admin) return;
-  var box = $("ajobs");
-  unsubs.admin = col.orderBy("createdAt", "desc").limit(30).onSnapshot(function(s){ draw(box, s, "admin", "No bookings yet."); }, fail(box));
-}
-function watchRider(){
-  if (unsubs.rider) return;
-  var box = $("rjobs");
-  unsubs.rider = col.where("riderEmail", "==", user.email.toLowerCase()).onSnapshot(function(sn){ draw(box, sn, "rider", "No jobs for you right now."); }, fail(box));
-}
 </script>
 </body>
 </html>

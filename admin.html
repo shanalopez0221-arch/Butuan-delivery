@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Butuan Delivery Admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Butuan Delivery Admin</h1>
+  <p>Approve IDs, assign riders, and watch every booking.</p>
+</header>
+<main>
+<form id="login" class="box hide" novalidate>
+  <b>Sign in</b>
+  <label for="em">Email</label><input id="em" type="email" autocomplete="username">
+  <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
+  <button class="go" type="submit">Sign in</button>
+  <p id="lmsg" class="err" role="status"></p>
+</form>
+<div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
+<div id="aids"></div>
+<div id="ajobs"></div>
+</main>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="shared.js"></script>
+<script>
+startAuth(function(u){
+  var box = $("ajobs"); $("aids").textContent = ""; box.textContent = ""; box.classList.remove("box", "err");
+  if (!u) return;
+  if (!isAdmin()){ box.textContent = "This account is not the admin."; box.classList.add("box", "err"); return; }
+  watchIds(); watchAdmin();
+});
+function watchIds(){
+  if (unsubs.ids) return;
+  var box = $("aids");
+  unsubs.ids = db.collection("users").where("status", "==", "pending").onSnapshot(function(sn){
+    box.textContent = "";
+    sn.forEach(function(d){
+      var u = d.data(), c = el("div", null, "box job");
+      c.appendChild(el("b", "ID check: " + u.name));
+      c.appendChild(el("p", u.phone + " · " + u.email));
+      c.appendChild(el("p", u.idType, "hint"));
+      var im = el("img", null, "proof"); im.src = u.idPhoto; im.alt = "ID photo of " + u.name; c.appendChild(im);
+      var ok = el("button", "Approve", "sm"), no = el("button", "Reject", "sm"); ok.type = "button"; no.type = "button";
+      ok.onclick = function(){ d.ref.update({ status: "approved" }); };
+      no.onclick = function(){ d.ref.update({ status: "rejected" }); };
+      c.appendChild(ok); c.appendChild(document.createTextNode(" ")); c.appendChild(no); box.appendChild(c);
+    });
+    if (!box.firstChild) box.appendChild(el("p", "No IDs waiting for review.", "box hint"));
+  }, fail(box));
+}
+
+function watchAdmin(){
+  if (unsubs.admin) return;
+  var box = $("ajobs");
+  unsubs.admin = col.orderBy("createdAt", "desc").limit(30).onSnapshot(function(s){ draw(box, s, "admin", "No bookings yet."); }, fail(box));
+}
+</script>
+</body>
+</html>
