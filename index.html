@@ -111,7 +111,7 @@
         <button type="button" data-sel="pay" data-i="1">GCash</button>
       </div>
       <select id="size" class="hide"><option value="0">Small (Bag)</option><option value="30">Medium (Box)</option><option value="80">Large (Sack)</option></select>
-      <select id="pay" class="hide"><option>Cash</option><option>GCash</option></select>
+      <select id="pay" class="hide"><option>Cash</option><option>GCash</option></select><p id="paynote" class="hint"></p>
       <label for="note">Rider instructions</label><textarea id="note" rows="2" placeholder="Who to call, what to pick up"></textarea>
     </div>
     <div class="foot">
@@ -148,7 +148,12 @@ function fare(){
   var km = Math.max(1, parseFloat($("km").value) || 1);
   return Math.round(CONFIG.baseFare + Math.max(0, km - CONFIG.includedKm) * CONFIG.perKm + parseInt($("size").value, 10));
 }
-function render(){ $("fare").textContent = "₱" + fare(); }
+function render(){
+  $("fare").textContent = "₱" + fare();
+  $("paynote").textContent = $("pay").value === "GCash"
+    ? "GCash payment: after a rider is assigned, the rider's registered GCash number will be shown in your booking. DALIGO platform fees are settled through the rider's wallet."
+    : "Cash payment: rider collects the delivery fare. The DALIGO platform fee is reserved from the rider's wallet.";
+}
 ["km","size"].forEach(function(i){ $(i).addEventListener("input", render); });
 render();
 
@@ -361,6 +366,7 @@ function drawTrack(b){
     var rr = el("div", null, "trow"), who = el("div");
     who.appendChild(el("b", b.riderName || "Your rider")); who.appendChild(el("p", "DALIGO Rider", "hint")); rr.appendChild(who);
     if (b.riderPhone){ var a = el("a", "Call rider", "sm"); a.href = "tel:" + b.riderPhone; rr.appendChild(a); }
+    if (b.pay === "GCash" && b.riderGcash) rr.appendChild(el("p", "Rider GCash: " + b.riderGcash, "hint"));
     s.appendChild(rr);
   }
   [["Pickup", b.pickup], ["Drop-off", b.dropoff], ["Item", b.size], ["Payment", b.pay]].forEach(function(p){ s.appendChild(el("p", p[0] + ": " + p[1], "tl")); });
