@@ -63,24 +63,24 @@ a{color:inherit}
   </form>
   <div id="track" class="box hide"></div>
 </section>
-<section id="rider" class="hide">
-  <div class="box">
-    <label for="rn">Your rider name</label>
-    <input id="rn" placeholder="Same name the dispatcher uses">
-    <button class="sm" id="rgo" type="button">Show my jobs</button>
-  </div>
-  <div id="rjobs"></div>
-</section>
-<section id="admin" class="hide">
-  <div id="ajobs"></div>
-</section>
+<form id="login" class="box hide" novalidate>
+  <b>Staff sign in</b>
+  <label for="em">Email</label><input id="em" type="email" autocomplete="username">
+  <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
+  <button class="go" type="submit">Sign in</button>
+  <p id="lmsg" class="err" role="status"></p>
+</form>
+<div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
+<section id="rider" class="hide"><div id="rjobs"></div></section>
+<section id="admin" class="hide"><div id="ajobs"></div></section>
 </main>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 // ===== Edit these =====
 var CONFIG = {
-  pin: "08162525",            // PIN for Rider and Admin tabs. Change it!
+  adminEmail: "shanalopez0221@gmail.com",   // the only account that can see all bookings
   baseFare: 50, includedKm: 2, perKm: 12,
   firebase: {
     apiKey: "AIzaSyCWyH0IcE6uZgzsToisEeom2l8SkbQjYa0",
@@ -94,9 +94,10 @@ var CONFIG = {
 // ======================
 firebase.initializeApp(CONFIG.firebase);
 var col = firebase.firestore().collection("bookings");
+var auth = firebase.auth();
 var $ = function(i){ return document.getElementById(i); };
 var LABEL = { new: "Waiting for rider", assigned: "Rider assigned", picked_up: "Picked up", delivered: "Delivered" };
-var unlocked = false, unsubs = {};
+var user = null, view = "book", unsubs = {};
 
 function el(tag, text, cls){ var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
 function fare(){
@@ -107,16 +108,31 @@ function render(){ $("fare").textContent = "₱" + fare(); }
 ["km","size"].forEach(function(i){ $(i).addEventListener("input", render); });
 render();
 
-// ---- tabs ----
-function show(v){
-  if ((v === "rider" || v === "admin") && !unlocked){
-    if (prompt("Enter PIN") !== CONFIG.pin){ alert("Wrong PIN."); v = "book"; } else unlocked = true;
+// ---- tabs and login ----
+function isAdmin(){ return user && user.email.toLowerCase() === CONFIG.adminEmail.toLowerCase(); }
+function stop(k){ if (unsubs[k]){ unsubs[k](); unsubs[k] = null; } }
+function show(v){ view = v; refresh(); }
+function refresh(){
+  var staff = view !== "book";
+  ["book","rider","admin"].forEach(function(x){ $(x).classList.toggle("hide", x !== view || (x !== "book" && !user)); });
+  $("login").classList.toggle("hide", !staff || !!user);
+  $("who").classList.toggle("hide", !staff || !user);
+  document.querySelectorAll("nav button").forEach(function(b){ b.classList.toggle("on", b.dataset.v === view); });
+  if (!user){ stop("admin"); stop("rider"); return; }
+  $("whotxt").textContent = "Signed in as " + user.email + ". ";
+  if (view === "admin"){
+    if (isAdmin()) watchAdmin(); else { $("admin").classList.remove("hide"); $("ajobs").textContent = "This account is not the admin."; $("ajobs").className = "box err"; }
   }
-  ["book","rider","admin"].forEach(function(s){ $(s).classList.toggle("hide", s !== v); });
-  document.querySelectorAll("nav button").forEach(function(b){ b.classList.toggle("on", b.dataset.v === v); });
-  if (v === "admin") watchAdmin();
+  if (view === "rider") watchRider();
 }
 document.querySelectorAll("nav button").forEach(function(b){ b.onclick = function(){ show(b.dataset.v); }; });
+auth.onAuthStateChanged(function(u){ user = u; refresh(); });
+$("login").addEventListener("submit", function(e){
+  e.preventDefault(); $("lmsg").textContent = "";
+  auth.signInWithEmailAndPassword($("em").value.trim(), $("pw").value).then(function(){ $("pw").value = ""; })
+    .catch(function(){ $("lmsg").textContent = "Wrong email or password."; });
+});
+$("out").onclick = function(){ auth.signOut(); };
 
 // ---- customer ----
 $("f").addEventListener("submit", function(e){
@@ -129,7 +145,7 @@ $("f").addEventListener("submit", function(e){
   col.add({
     name: v("name"), phone: v("phone"), pickup: v("pu"), dropoff: v("do"), km: parseFloat($("km").value) || 1,
     size: $("size").selectedOptions[0].text, pay: $("pay").value, note: v("note"), fare: fare(),
-    status: "new", rider: "", createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    status: "new", riderEmail: "", createdAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function(ref){
     $("msg").textContent = ""; $("f").reset(); render(); watchTrack(ref.id);
   }).catch(function(){ $("msg").className = "err"; $("msg").textContent = "Could not send. Check your internet and try again."; });
@@ -142,7 +158,6 @@ function watchTrack(id){
     t.textContent = "";
     t.appendChild(el("b", "Booking sent. Fare: ₱" + b.fare));
     var p = el("p"); p.appendChild(el("span", LABEL[b.status], "st")); t.appendChild(p);
-    if (b.rider) t.appendChild(el("p", "Rider: " + b.rider));
     t.appendChild(el("p", b.pickup + " to " + b.dropoff, "hint"));
   });
 }
@@ -157,11 +172,11 @@ function card(d, mode){
   if (b.note) c.appendChild(el("p", "Note: " + b.note, "hint"));
   if (mode === "admin"){
     if (b.status === "new" || b.status === "assigned"){
-      var i = el("input"); i.placeholder = "Rider name"; i.value = b.rider || ""; c.appendChild(i);
-      var g = el("button", b.rider ? "Change rider" : "Assign rider", "sm"); g.type = "button";
-      g.onclick = function(){ var r = i.value.trim(); if (r) d.ref.update({ rider: r, status: "assigned" }); };
+      var i = el("input"); i.type = "email"; i.placeholder = "Rider email"; i.value = b.riderEmail || ""; c.appendChild(i);
+      var g = el("button", b.riderEmail ? "Change rider" : "Assign rider", "sm"); g.type = "button";
+      g.onclick = function(){ var r = i.value.trim().toLowerCase(); if (r) d.ref.update({ riderEmail: r, status: "assigned" }); };
       c.appendChild(g);
-    } else if (b.rider) c.appendChild(el("p", "Rider: " + b.rider));
+    } else if (b.riderEmail) c.appendChild(el("p", "Rider: " + b.riderEmail));
   } else {
     var next = b.status === "assigned" ? ["picked_up", "Mark picked up"] : b.status === "picked_up" ? ["delivered", "Mark delivered"] : null;
     if (next){ var n = el("button", next[1], "sm"); n.type = "button"; n.onclick = function(){ d.ref.update({ status: next[0] }); }; c.appendChild(n); }
@@ -181,12 +196,11 @@ function watchAdmin(){
   var box = $("ajobs");
   unsubs.admin = col.orderBy("createdAt", "desc").limit(50).onSnapshot(function(s){ draw(box, s, "admin", "No bookings yet."); }, fail(box));
 }
-$("rgo").onclick = function(){
-  var name = $("rn").value.trim(), box = $("rjobs");
-  if (!name) return;
-  if (unsubs.rider) unsubs.rider();
-  unsubs.rider = col.where("rider", "==", name).onSnapshot(function(s){ draw(box, s, "rider", "No jobs for " + name + " right now."); }, fail(box));
-};
+function watchRider(){
+  stop("rider");
+  var box = $("rjobs");
+  unsubs.rider = col.where("riderEmail", "==", user.email.toLowerCase()).onSnapshot(function(sn){ draw(box, sn, "rider", "No jobs for you right now."); }, fail(box));
+}
 </script>
 </body>
 </html>
