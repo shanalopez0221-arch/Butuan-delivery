@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>DALIGO</title>
 <meta name="theme-color" content="#12318A">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,800;1,600;1,900&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <link rel="stylesheet" href="style.css">
@@ -28,6 +31,7 @@
     <select id="st"><option>Driver's license</option><option>PhilSys ID</option><option>Passport</option><option>UMID</option><option>Postal ID</option><option>Voter's ID</option><option>Other government ID</option></select>
     <label for="sid">Clear photo of your ID</label><input id="sid" type="file" accept="image/*">
     <label class="chk"><input id="sc" type="checkbox">I agree that Butuan Delivery keeps my ID photo to verify my account. Only the admin can see it.</label>
+    <p class="hint"><a href="privacy.html">Read the privacy policy</a></p>
     <button class="go" type="submit">Create account</button>
     <p id="smsg" class="err" role="status"></p>
   </form>
@@ -70,6 +74,8 @@
   <section id="vprofile" class="hide">
     <h2 class="greet" style="margin-bottom:14px">Profile</h2>
     <div class="box"><b id="pname"></b><p id="pinfo" class="hint"></p><p><span class="st">ID verified</span></p><button class="sm" id="out2" type="button">Sign out</button></div>
+    <p class="hint"><a href="privacy.html">Privacy policy</a></p>
+    <button class="sm" id="del" type="button" style="background:#fff;border:2px solid #E5352B;color:#E5352B">Delete my account</button>
   </section>
 </div>
 </main>
@@ -360,6 +366,17 @@ function drawTrack(b){
   [["Pickup", b.pickup], ["Drop-off", b.dropoff], ["Item", b.size], ["Payment", b.pay]].forEach(function(p){ s.appendChild(el("p", p[0] + ": " + p[1], "tl")); });
 }
 $("tback").onclick = closeTrack;
+$("del").onclick = function(){
+  if (!confirm("Delete your account and your ID photo? This cannot be undone.")) return;
+  var pw = prompt("Enter your password to confirm");
+  if (!pw) return;
+  var uid = user.uid;
+  user.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(user.email, pw))
+    .then(function(){ return db.collection("users").doc(uid).delete(); })
+    .then(function(){ return auth.currentUser.delete(); })
+    .then(function(){ toast("Your account was deleted."); })
+    .catch(function(){ toast("Could not delete. Check your password and try again."); });
+};
 </script>
 </body>
 </html>

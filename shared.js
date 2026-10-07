@@ -115,3 +115,6 @@ function squeezeTo(file, limit, i){
 }
 // Tap any photo to enlarge it, tap again to shrink
 document.addEventListener("click", function(e){ if (e.target.classList && e.target.classList.contains("proof")) e.target.classList.toggle("big"); });
+
+// Lets the apps be installed on a phone
+if ("serviceWorker" in navigator) window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
