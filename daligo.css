@@ -65,3 +65,11 @@ a.sm{display:inline-block;text-decoration:none;margin:0}
 #tabs button{position:relative}
 .nb{position:absolute;top:-2px;right:10px;background:#E5352B;color:#fff;border-radius:999px;font-size:.7rem;min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 4px}
 .nb.hide{display:none}
+
+.job-fin{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.job-fin span{background:#F2F5FA;border-radius:999px;padding:5px 9px;font-size:.78rem;font-weight:700;color:var(--navy)}
+.wallet-card{border:2px solid var(--line)}
+.wallet-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.wallet-head b{display:block;font-size:1.8rem;color:var(--teal)}
+.st.warn{background:#FFE7B0;color:#7A4B00}
+.st.ok{background:#CFF3EE;color:#0B6B63}

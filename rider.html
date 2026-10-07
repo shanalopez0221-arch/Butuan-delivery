@@ -27,6 +27,7 @@
   <label for="re">Email</label><input id="re" type="email" autocomplete="email">
   <label for="rpw">Password (6 or more characters)</label><input id="rpw" type="password" autocomplete="new-password">
   <label for="rpl">Motorcycle plate number</label><input id="rpl" autocapitalize="characters">
+  <label for="rgc">Rider GCash number</label><input id="rgc" type="tel" inputmode="numeric" placeholder="09XXXXXXXXX">
   <div id="docs-signup"></div>
   <label class="chk"><input id="rc" type="checkbox">I agree that Butuan Delivery keeps my documents to check my application. Only the admin can see them.</label>
   <button class="go" type="submit">Send application</button>
@@ -48,10 +49,24 @@
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
 <div id="app" class="hide">
-  <section id="vjobs"><h2 class="greet" id="greet" style="margin-bottom:6px">Your jobs</h2><p id="gps" class="hint"></p><div id="rjobs"></div></section>
+  <section id="vjobs">
+  <h2 class="greet" id="greet" style="margin-bottom:6px">Your jobs</h2>
+  <div class="box wallet-card">
+    <div class="wallet-head"><div><span class="hint">DALIGO wallet</span><b id="wallet">₱0</b></div><span id="walletst" class="st">Top-up required for cash jobs</span></div>
+    <p class="hint">Minimum wallet for cash bookings: <b id="walletmin">₱300</b></p>
+    <p class="hint">Top up by sending GCash to <b id="ownerGcash"></b>, then submit your reference.</p>
+    <div class="row">
+      <input id="topupamt" type="number" min="300" step="50" placeholder="Amount">
+      <input id="topupref" placeholder="GCash reference">
+    </div>
+    <button class="sm" id="topup" type="button">Request wallet top-up</button>
+    <p id="topupmsg" class="hint"></p>
+  </div>
+  <p id="gps" class="hint"></p><div id="rjobs"></div>
+</section>
   <section id="vprofile" class="hide">
     <h2 class="greet" style="margin-bottom:14px">Profile</h2>
-    <div class="box"><b id="pname"></b><p id="pinfo" class="hint"></p><p id="pplate" class="hint"></p><p><span class="st">Approved rider</span></p><button class="sm" id="out2" type="button">Sign out</button></div>
+    <div class="box"><b id="pname"></b><p id="pinfo" class="hint"></p><p id="pplate" class="hint"></p><p id="pgcash" class="hint"></p><p><span class="st">Approved rider</span></p><button class="sm" id="out2" type="button">Sign out</button></div>
   </section>
 </div>
 </main>
@@ -95,6 +110,10 @@ function refresh(){
     var fn = rid.name.split(" ")[0];
     $("av").textContent = fn.charAt(0).toUpperCase(); $("avn").textContent = fn; $("greet").textContent = "Hi, " + fn + "! Your jobs";
     $("pname").textContent = rid.name; $("pinfo").textContent = rid.phone + " · " + rid.email; $("pplate").textContent = "Plate: " + rid.plate;
+    $("pgcash").textContent = "GCash: " + (rid.gcash || "Not added");
+    $("wallet").textContent = peso(walletAmount(rid)); $("walletmin").textContent = peso(CONFIG.riderMinWallet); $("ownerGcash").textContent = CONFIG.ownerGcash;
+    $("walletst").textContent = walletAmount(rid) >= CONFIG.riderMinWallet ? "Ready for cash jobs" : "Top-up required for cash jobs";
+    $("walletst").className = walletAmount(rid) >= CONFIG.riderMinWallet ? "st ok" : "st warn";
   }
   if (ok) watchRider(); else { stop("rider"); $("rjobs").textContent = ""; stopGeo(); }
 }
@@ -111,7 +130,7 @@ $("rsignup").addEventListener("submit", function(e){
   busy = true; m.className = "hint"; m.textContent = "Sending your application. This can take a minute…";
   readDocs("s_").then(function(o){ docs = o; return auth.createUserWithEmailAndPassword(g("re"), $("rpw").value); })
     .then(function(cr){
-      var data = { name: g("rn"), phone: g("rp"), email: g("re").toLowerCase(), plate: g("rpl").toUpperCase(), status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+      var data = { name: g("rn"), phone: g("rp"), email: g("re").toLowerCase(), plate: g("rpl").toUpperCase(), gcash: g("rgc"), walletBalance: 0, walletUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(), status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp() };
       DOCS.forEach(function(d){ data[d[0]] = docs[d[0]]; });
       return db.collection("riders").doc(cr.user.uid).set(data);
     })
@@ -126,6 +145,20 @@ $("rredo").addEventListener("submit", function(e){
   readDocs("r_").then(function(o){ o.status = "pending"; return db.collection("riders").doc(user.uid).update(o); })
     .catch(function(){ $("rst").textContent = "Could not send. Try again."; });
 });
+$("topup").onclick = function(){
+  var amount = Math.round(Number($("topupamt").value) || 0), ref = $("topupref").value.trim();
+  if (amount < CONFIG.riderMinWallet){ $("topupmsg").textContent = "Minimum top-up is " + peso(CONFIG.riderMinWallet) + "."; return; }
+  if (!ref){ $("topupmsg").textContent = "Enter your GCash reference number after sending the money."; return; }
+  $("topupmsg").textContent = "Submitting top-up request…";
+  db.collection("walletTopups").add({
+    riderUid: user.uid, riderEmail: user.email.toLowerCase(), riderName: rid.name, riderGcash: rid.gcash || "",
+    amount: amount, reference: ref, ownerGcash: CONFIG.ownerGcash,
+    status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){
+    $("topupamt").value = ""; $("topupref").value = "";
+    $("topupmsg").textContent = "Request sent. Admin will verify the GCash transfer before crediting your wallet.";
+  }).catch(function(){ $("topupmsg").textContent = "Could not submit the top-up request."; });
+};
 function watchRider(){
   if (unsubs.rider) return;
   var box = $("rjobs");

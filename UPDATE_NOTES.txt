@@ -1,0 +1,7 @@
+DALIGO payment/revenue update
+- shared.js: platform fee, rider wallet, assignment checks, delivery settlement ledger
+- rider.html: GCash number, wallet display, top-up request workflow
+- admin.html: Finance tab, top-up approval, revenue ledger
+- index.html: payment method messaging, platform fee/rider earning fields
+- daligo.css: wallet/revenue UI
+- PAYMENT_SETUP.md: payment flow and production notes

@@ -33,12 +33,14 @@
   <section id="tj"><h2 class="greet" style="margin-bottom:14px">Bookings</h2><div id="ajobs"></div></section>
   <section id="tr" class="hide"><h2 class="greet" style="margin-bottom:14px">Rider applications</h2><div id="arids"></div></section>
   <section id="ti" class="hide"><h2 class="greet" style="margin-bottom:14px">Customer IDs</h2><div id="aids"></div></section>
+  <section id="tf" class="hide"><h2 class="greet" style="margin-bottom:14px">Revenue & Wallets</h2><div id="finance"></div></section>
 </div>
 </main>
 <nav id="tabs" class="hide">
   <button type="button" data-t="tj" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M8 14l3 3 5-6"/></svg>Bookings</button>
   <button type="button" data-t="tr"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h5l3-7h3M9 10h3"/></svg>Riders<span class="nb hide" id="nr"></span></button>
   <button type="button" data-t="ti"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c0-2 6-2 6 0M15 10h3M15 14h3"/></svg>IDs<span class="nb hide" id="ni"></span></button>
+  <button type="button" data-t="tf">Finance</button>
 </nav>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -46,15 +48,15 @@
 <script src="shared.js"></script>
 <script>
 startAuth(function(u){
-  ["ajobs", "arids", "aids"].forEach(function(i){ $(i).textContent = ""; $(i).classList.remove("box", "err"); });
+  ["ajobs", "arids", "aids", "finance"].forEach(function(i){ $(i).textContent = ""; $(i).classList.remove("box", "err"); });
   var ok = !!u && isAdmin();
   $("app").classList.toggle("hide", !ok); $("tabs").classList.toggle("hide", !ok); $("avatar").classList.toggle("hide", !ok);
   $("who").classList.toggle("hide", !u || ok);
   $("amsg").textContent = u && !ok ? "This account is not the admin." : ""; $("amsg").classList.toggle("hide", !(u && !ok));
-  if (ok){ $("av").textContent = "A"; $("avn").textContent = "Admin"; watchRiderApps(); watchApprovedRiders(); watchIds(); watchAdmin(); }
+  if (ok){ $("av").textContent = "A"; $("avn").textContent = "Admin"; watchRiderApps(); watchApprovedRiders(); watchIds(); watchAdmin(); watchFinance(); }
 });
 function go(t){
-  ["tj", "tr", "ti"].forEach(function(x){ $(x).classList.toggle("hide", x !== t); });
+  ["tj", "tr", "ti", "tf"].forEach(function(x){ $(x).classList.toggle("hide", x !== t); });
   document.querySelectorAll("#tabs button").forEach(function(b){ b.classList.toggle("on", b.dataset.t === t); });
   window.scrollTo(0, 0);
 }
@@ -113,6 +115,54 @@ function watchApprovedRiders(){
     sn.forEach(function(d){ var u = d.data(), o = el("option", u.name + " " + u.plate); o.value = u.email; dl.appendChild(o); window.RIDERS[u.email] = { name: u.name, phone: u.phone }; });
   });
 }
+
+
+function watchFinance(){
+  if (unsubs.finance) return;
+  var box = $("finance");
+  var total = 0, topups = 0;
+  var html = '<div class="box"><b>DALIGO settlement account</b><p class="hint">GCash: <b>' + CONFIG.ownerGcash + '</b></p><p class="hint">Platform fee rate: <b>' + Math.round(CONFIG.platformFeeRate*100) + '%</b></p></div>';
+  box.innerHTML = html;
+  unsubs.finance = db.collection("platformRevenue").orderBy("createdAt","desc").limit(50).onSnapshot(function(sn){
+    var total = 0; sn.forEach(function(d){ total += Number(d.data().amount)||0; });
+    box.innerHTML = '<div class="box"><b>DALIGO revenue</b><p style="font-size:1.7rem;font-weight:800">' + peso(total) + '</p><p class="hint">Revenue is credited from rider wallet deductions. Your settlement GCash: <b>' + CONFIG.ownerGcash + '</b></p></div>';
+    sn.forEach(function(d){
+      var x=d.data(), c=el("div",null,"box job");
+      c.appendChild(el("b", "Platform fee " + peso(x.amount)));
+      c.appendChild(el("p", (x.paymentMethod||"") + " · " + (x.riderName||x.riderEmail||"Rider")));
+      c.appendChild(el("p", "Booking: " + (x.bookingId||"—") + " · Settled to DALIGO ledger", "hint"));
+      box.appendChild(c);
+    });
+    watchTopups(box);
+  }, fail(box));
+}
+function watchTopups(box){
+  if (unsubs.topups) return;
+  unsubs.topups = db.collection("walletTopups").where("status","==","pending").onSnapshot(function(sn){
+    if (!sn.size) return;
+    var h=el("div",null,"box"); h.appendChild(el("b","Pending rider wallet top-ups"));
+    sn.forEach(function(d){
+      var x=d.data(), c=el("div",null,"job");
+      c.appendChild(el("b",x.riderName+" · "+peso(x.amount)));
+      c.appendChild(el("p","GCash ref: "+x.reference));
+      c.appendChild(el("p","Rider GCash: "+(x.riderGcash||"Not provided")+" · Sent to DALIGO: "+CONFIG.ownerGcash,"hint"));
+      var ok=el("button","Approve top-up","sm"), no=el("button","Reject","sm");
+      ok.onclick=function(){
+        var rr=db.collection("riders").doc(x.riderUid);
+        db.runTransaction(function(tx){ return tx.get(rr).then(function(rd){
+          if(!rd.exists) throw new Error("Rider not found");
+          var old=walletAmount(rd.data());
+          tx.update(rr,{walletBalance:old+Number(x.amount),walletUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+          tx.update(d.ref,{status:"approved",approvedAt:firebase.firestore.FieldValue.serverTimestamp(),approvedBy:user.email});
+        });}).catch(function(){ toast("Could not approve top-up."); });
+      };
+      no.onclick=function(){ d.ref.update({status:"rejected",approvedAt:firebase.firestore.FieldValue.serverTimestamp(),approvedBy:user.email}); };
+      c.appendChild(ok); c.appendChild(no); h.appendChild(c);
+    });
+    box.prepend(h);
+  });
+}
+
 </script>
 </body>
 </html>
