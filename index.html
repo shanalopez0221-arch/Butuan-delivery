@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Butuan Delivery</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<style>
+:root{--bg:#f2f6f5;--card:#fff;--ink:#12201f;--mute:#5b6e6c;--teal:#0e4f4a;--sun:#f2b01e;--line:#cfdcda;--onteal:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1a19;--card:#152826;--ink:#e8f1ef;--mute:#9bb2af;--teal:#2c8f86;--line:#2a4440}}
+:root[data-theme="dark"]{--bg:#0d1a19;--card:#152826;--ink:#e8f1ef;--mute:#9bb2af;--teal:#2c8f86;--line:#2a4440}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45}
+header{background:var(--teal);color:var(--onteal);padding:28px 20px 56px}
+header h1{margin:0;font-size:2.1rem;font-weight:800;letter-spacing:-.02em}
+header p{margin:6px 0 0;max-width:34ch;opacity:.9}
+main{max-width:520px;margin:-36px auto 0;padding:0 16px 40px}
+form{background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--line)}
+label{display:block;font-weight:600;margin:14px 0 6px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid var(--sun);outline-offset:1px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.km{display:flex;align-items:center;gap:10px}
+.km button{width:46px;height:46px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:1.4rem;cursor:pointer}
+.km input{text-align:center}
+.fare{margin:20px 0 4px;padding:16px;border-radius:12px;background:var(--sun);color:#12201f;display:flex;justify-content:space-between;align-items:baseline}
+.fare b{font-size:2rem;font-weight:800}
+.hint{color:var(--mute);font-size:.85rem;margin:8px 0 0}
+.go{width:100%;margin-top:16px;padding:15px;border:0;border-radius:12px;background:var(--teal);color:var(--onteal);font:inherit;font-weight:800;font-size:1.05rem;cursor:pointer}
+.alt{width:100%;margin-top:10px;padding:13px;border-radius:12px;border:1px solid var(--teal);background:transparent;color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+#msg{margin-top:12px;font-weight:600;min-height:1.2em}
+.err{color:#b3261e}
+@media (prefers-reduced-motion:no-preference){.fare b{transition:opacity .15s}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Butuan Delivery</h1>
+  <p>Book a rider for parcels, food, and documents anywhere in Butuan City.</p>
+</header>
+<main>
+<form id="f" novalidate>
+  <label for="name">Your name</label>
+  <input id="name" autocomplete="name">
+  <label for="phone">Mobile number</label>
+  <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="09XX XXX XXXX">
+  <label for="pu">Pickup address</label>
+  <input id="pu" placeholder="Barangay, street, or landmark">
+  <label for="do">Drop-off address</label>
+  <input id="do" placeholder="Barangay, street, or landmark">
+  <label for="km">Estimated distance (km)</label>
+  <div class="km">
+    <button type="button" id="minus" aria-label="Less distance">−</button>
+    <input id="km" type="number" inputmode="decimal" min="1" step="0.5" value="3">
+    <button type="button" id="plus" aria-label="More distance">+</button>
+  </div>
+  <div class="row">
+    <div><label for="size">Item size</label>
+      <select id="size"><option value="0">Small (bag)</option><option value="30">Medium (box)</option><option value="80">Large (sack)</option></select></div>
+    <div><label for="pay">Payment</label>
+      <select id="pay"><option>Cash</option><option>GCash</option></select></div>
+  </div>
+  <label for="note">Note for the rider</label>
+  <textarea id="note" rows="2" placeholder="Who to call, what to pick up"></textarea>
+  <div class="fare"><span>Estimated fare</span><b id="fare">₱0</b></div>
+  <p class="hint">The final fare is confirmed by our dispatcher before a rider is sent.</p>
+  <button class="go" type="submit">Send booking by text</button>
+  <button class="alt" type="button" id="copy">Copy booking</button>
+  <div id="msg" role="status"></div>
+</form>
+</main>
+<script>
+// Edit these to match your service
+var CONFIG = { dispatchNumber: "09XXXXXXXXX", baseFare: 50, includedKm: 2, perKm: 12 };
+var $ = function(id){ return document.getElementById(id); };
+function fare(){
+  var km = Math.max(1, parseFloat($("km").value) || 1);
+  var extra = Math.max(0, km - CONFIG.includedKm) * CONFIG.perKm;
+  return Math.round(CONFIG.baseFare + extra + parseInt($("size").value, 10));
+}
+function render(){ $("fare").textContent = "₱" + fare(); }
+function step(d){ var v = (parseFloat($("km").value) || 1) + d; $("km").value = Math.max(1, v); render(); }
+$("minus").onclick = function(){ step(-0.5); };
+$("plus").onclick = function(){ step(0.5); };
+["km","size"].forEach(function(i){ $(i).addEventListener("input", render); });
+function booking(){
+  return "DELIVERY BOOKING\nName: " + $("name").value.trim() + "\nPhone: " + $("phone").value.trim() +
+    "\nPickup: " + $("pu").value.trim() + "\nDrop-off: " + $("do").value.trim() +
+    "\nDistance: " + $("km").value + " km\nItem: " + $("size").selectedOptions[0].text +
+    "\nPayment: " + $("pay").value + "\nEst. fare: ₱" + fare() +
+    ($("note").value.trim() ? "\nNote: " + $("note").value.trim() : "");
+}
+function valid(){
+  var ok = $("name").value.trim() && $("phone").value.trim() && $("pu").value.trim() && $("do").value.trim();
+  $("msg").className = ok ? "" : "err";
+  if (!ok) $("msg").textContent = "Fill in your name, number, pickup, and drop-off first.";
+  return !!ok;
+}
+$("f").addEventListener("submit", function(e){
+  e.preventDefault();
+  if (!valid()) return;
+  $("msg").textContent = "Opening your messages app…";
+  window.location.href = "sms:" + CONFIG.dispatchNumber + "?body=" + encodeURIComponent(booking());
+});
+$("copy").onclick = function(){
+  if (!valid()) return;
+  var t = booking();
+  var done = function(){ $("msg").textContent = "Copied. Paste it into Messenger or a text."; };
+  try { navigator.clipboard.writeText(t).then(done, function(){ $("msg").textContent = "Could not copy. Use Send booking by text."; }); }
+  catch (x) { $("msg").textContent = "Could not copy. Use Send booking by text."; }
+};
+render();
+</script>
+</body>
+</html>
