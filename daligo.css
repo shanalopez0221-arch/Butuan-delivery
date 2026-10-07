@@ -61,3 +61,7 @@ a.sm{display:inline-block;text-decoration:none;margin:0}
 .pk.r{background:#E5352B;color:#fff}
 .pk.w{background:#fff;font-size:1.3rem}
 .tl{margin:3px 0;font-size:.92rem;color:var(--navy)}
+.logo .role{display:inline-block;margin-top:2px;background:var(--sun);color:var(--navy);font-style:normal;font-weight:800;font-size:.72rem;padding:3px 12px;border-radius:999px;letter-spacing:.08em;text-transform:uppercase}
+#tabs button{position:relative}
+.nb{position:absolute;top:-2px;right:10px;background:#E5352B;color:#fff;border-radius:999px;font-size:.7rem;min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 4px}
+.nb.hide{display:none}

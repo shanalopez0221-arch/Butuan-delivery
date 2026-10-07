@@ -3,14 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Butuan Delivery Admin</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<title>DALIGO Admin</title>
+<meta name="theme-color" content="#12318A">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,800;1,600;1,900&display=swap">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="daligo.css">
 </head>
 <body>
-<header>
-  <h1>Butuan Delivery Admin</h1>
-  <p>Approve IDs, assign riders, and watch every booking.</p>
+<header class="top">
+  <div style="width:44px"></div>
+  <div class="logo"><div class="w"><svg width="34" height="22" viewBox="0 0 34 22" aria-hidden="true"><g fill="#FFC31A"><rect x="0" y="2" width="22" height="4" rx="2"/><rect x="7" y="9" width="22" height="4" rx="2"/><rect x="0" y="16" width="16" height="4" rx="2"/></g></svg><span>DALI<b>GO</b></span></div><p><span class="role">Admin</span></p></div>
+  <div class="av hide" id="avatar"><i id="av">D</i><span id="avn"></span></div>
 </header>
 <main>
 <form id="login" class="box hide" novalidate>
@@ -22,15 +25,67 @@
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
 <datalist id="riderlist"></datalist>
-<div id="arids"></div>
-<div id="aids"></div>
-<div id="ajobs"></div>
+<p id="amsg" class="box err hide"></p>
+<div id="app" class="hide">
+  <section id="tj"><h2 class="greet" style="margin-bottom:14px">Bookings</h2><div id="ajobs"></div></section>
+  <section id="tr" class="hide"><h2 class="greet" style="margin-bottom:14px">Rider applications</h2><div id="arids"></div></section>
+  <section id="ti" class="hide"><h2 class="greet" style="margin-bottom:14px">Customer IDs</h2><div id="aids"></div></section>
+</div>
 </main>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js">function watchRiderApps(){
+<nav id="tabs" class="hide">
+  <button type="button" data-t="tj" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M8 14l3 3 5-6"/></svg>Bookings</button>
+  <button type="button" data-t="tr"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h5l3-7h3M9 10h3"/></svg>Riders<span class="nb hide" id="nr"></span></button>
+  <button type="button" data-t="ti"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c0-2 6-2 6 0M15 10h3M15 14h3"/></svg>IDs<span class="nb hide" id="ni"></span></button>
+</nav>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="shared.js"></script>
+<script>
+startAuth(function(u){
+  ["ajobs", "arids", "aids"].forEach(function(i){ $(i).textContent = ""; $(i).classList.remove("box", "err"); });
+  var ok = !!u && isAdmin();
+  $("app").classList.toggle("hide", !ok); $("tabs").classList.toggle("hide", !ok); $("avatar").classList.toggle("hide", !ok);
+  $("who").classList.toggle("hide", !u || ok);
+  $("amsg").textContent = u && !ok ? "This account is not the admin." : ""; $("amsg").classList.toggle("hide", !(u && !ok));
+  if (ok){ $("av").textContent = "A"; $("avn").textContent = "Admin"; watchRiderApps(); watchApprovedRiders(); watchIds(); watchAdmin(); }
+});
+function go(t){
+  ["tj", "tr", "ti"].forEach(function(x){ $(x).classList.toggle("hide", x !== t); });
+  document.querySelectorAll("#tabs button").forEach(function(b){ b.classList.toggle("on", b.dataset.t === t); });
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("#tabs button").forEach(function(b){ b.onclick = function(){ go(b.dataset.t); }; });
+function watchIds(){
+  if (unsubs.ids) return;
+  var box = $("aids");
+  unsubs.ids = db.collection("users").where("status", "==", "pending").onSnapshot(function(sn){
+    box.textContent = ""; $("ni").textContent = sn.size; $("ni").classList.toggle("hide", !sn.size);
+    sn.forEach(function(d){
+      var u = d.data(), c = el("div", null, "box job");
+      c.appendChild(el("b", "ID check: " + u.name));
+      c.appendChild(el("p", u.phone + " · " + u.email));
+      c.appendChild(el("p", u.idType, "hint"));
+      var im = el("img", null, "proof"); im.src = u.idPhoto; im.alt = "ID photo of " + u.name; c.appendChild(im);
+      var ok = el("button", "Approve", "sm"), no = el("button", "Reject", "sm"); ok.type = "button"; no.type = "button";
+      ok.onclick = function(){ d.ref.update({ status: "approved" }); };
+      no.onclick = function(){ d.ref.update({ status: "rejected" }); };
+      c.appendChild(ok); c.appendChild(document.createTextNode(" ")); c.appendChild(no); box.appendChild(c);
+    });
+    if (!box.firstChild) box.appendChild(el("p", "No IDs waiting for review.", "box hint"));
+  }, fail(box));
+}
+
+function watchAdmin(){
+  if (unsubs.admin) return;
+  var box = $("ajobs");
+  unsubs.admin = col.orderBy("createdAt", "desc").limit(30).onSnapshot(function(s){ draw(box, s, "admin", "No bookings yet."); }, fail(box));
+}
+function watchRiderApps(){
   if (unsubs.rids) return;
   var box = $("arids");
   unsubs.rids = db.collection("riders").where("status", "==", "pending").onSnapshot(function(sn){
-    box.textContent = "";
+    box.textContent = ""; $("nr").textContent = sn.size; $("nr").classList.toggle("hide", !sn.size);
     sn.forEach(function(d){
       var u = d.data(), c = el("div", null, "box job");
       c.appendChild(el("b", "Rider application: " + u.name));
@@ -54,42 +109,6 @@ function watchApprovedRiders(){
     var dl = $("riderlist"); dl.textContent = ""; window.RIDERS = {};
     sn.forEach(function(d){ var u = d.data(), o = el("option", u.name + " " + u.plate); o.value = u.email; dl.appendChild(o); window.RIDERS[u.email] = { name: u.name, phone: u.phone }; });
   });
-}
-</script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
-<script>
-startAuth(function(u){
-  var box = $("ajobs"); $("arids").textContent = ""; $("aids").textContent = ""; box.textContent = ""; box.classList.remove("box", "err");
-  if (!u) return;
-  if (!isAdmin()){ box.textContent = "This account is not the admin."; box.classList.add("box", "err"); return; }
-  watchRiderApps(); watchApprovedRiders(); watchIds(); watchAdmin();
-});
-function watchIds(){
-  if (unsubs.ids) return;
-  var box = $("aids");
-  unsubs.ids = db.collection("users").where("status", "==", "pending").onSnapshot(function(sn){
-    box.textContent = "";
-    sn.forEach(function(d){
-      var u = d.data(), c = el("div", null, "box job");
-      c.appendChild(el("b", "ID check: " + u.name));
-      c.appendChild(el("p", u.phone + " · " + u.email));
-      c.appendChild(el("p", u.idType, "hint"));
-      var im = el("img", null, "proof"); im.src = u.idPhoto; im.alt = "ID photo of " + u.name; c.appendChild(im);
-      var ok = el("button", "Approve", "sm"), no = el("button", "Reject", "sm"); ok.type = "button"; no.type = "button";
-      ok.onclick = function(){ d.ref.update({ status: "approved" }); };
-      no.onclick = function(){ d.ref.update({ status: "rejected" }); };
-      c.appendChild(ok); c.appendChild(document.createTextNode(" ")); c.appendChild(no); box.appendChild(c);
-    });
-    if (!box.firstChild) box.appendChild(el("p", "No IDs waiting for review.", "box hint"));
-  }, fail(box));
-}
-
-function watchAdmin(){
-  if (unsubs.admin) return;
-  var box = $("ajobs");
-  unsubs.admin = col.orderBy("createdAt", "desc").limit(30).onSnapshot(function(s){ draw(box, s, "admin", "No bookings yet."); }, fail(box));
 }
 </script>
 </body>

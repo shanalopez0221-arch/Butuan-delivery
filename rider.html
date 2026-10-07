@@ -3,14 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Butuan Delivery Rider</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<title>DALIGO Rider</title>
+<meta name="theme-color" content="#12318A">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,800;1,600;1,900&display=swap">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="daligo.css">
 </head>
 <body>
-<header>
-  <h1>Butuan Delivery Rider</h1>
-  <p>Your jobs. Take a photo at pickup and at delivery.</p>
+<header class="top">
+  <div style="width:44px"></div>
+  <div class="logo"><div class="w"><svg width="34" height="22" viewBox="0 0 34 22" aria-hidden="true"><g fill="#FFC31A"><rect x="0" y="2" width="22" height="4" rx="2"/><rect x="7" y="9" width="22" height="4" rx="2"/><rect x="0" y="16" width="16" height="4" rx="2"/></g></svg><span>DALI<b>GO</b></span></div><p><span class="role">Rider</span></p></div>
+  <div class="av hide" id="avatar"><i id="av">D</i><span id="avn"></span></div>
 </header>
 <main>
 <form id="rsignup" class="box hide" novalidate>
@@ -41,9 +44,18 @@
   <p id="lmsg" class="err" role="status"></p>
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
-<p id="gps" class="hint"></p>
-<div id="rjobs" class="hide"></div>
+<div id="app" class="hide">
+  <section id="vjobs"><h2 class="greet" id="greet" style="margin-bottom:6px">Your jobs</h2><p id="gps" class="hint"></p><div id="rjobs"></div></section>
+  <section id="vprofile" class="hide">
+    <h2 class="greet" style="margin-bottom:14px">Profile</h2>
+    <div class="box"><b id="pname"></b><p id="pinfo" class="hint"></p><p id="pplate" class="hint"></p><p><span class="st">Approved rider</span></p><button class="sm" id="out2" type="button">Sign out</button></div>
+  </section>
+</div>
 </main>
+<nav id="tabs" class="hide">
+  <button type="button" data-t="vjobs" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Jobs</button>
+  <button type="button" data-t="vprofile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</button>
+</nav>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -75,7 +87,12 @@ function refresh(){
   $("rst").textContent = note;
   $("rstate").classList.toggle("hide", !note);
   $("rredo").classList.toggle("hide", !(r === "rider" && rid.status === "rejected"));
-  $("rjobs").classList.toggle("hide", !ok);
+  $("app").classList.toggle("hide", !ok); $("tabs").classList.toggle("hide", !ok); $("avatar").classList.toggle("hide", !ok); $("who").classList.toggle("hide", !user || ok);
+  if (ok){
+    var fn = rid.name.split(" ")[0];
+    $("av").textContent = fn.charAt(0).toUpperCase(); $("avn").textContent = fn; $("greet").textContent = "Hi, " + fn + "! Your jobs";
+    $("pname").textContent = rid.name; $("pinfo").textContent = rid.phone + " · " + rid.email; $("pplate").textContent = "Plate: " + rid.plate;
+  }
   if (ok) watchRider(); else { stop("rider"); $("rjobs").textContent = ""; stopGeo(); }
 }
 startAuth(function(u){
@@ -131,6 +148,13 @@ function onPos(p){
   jobs.forEach(function(ref){ ref.update({ riderLat: lat, riderLng: lng, riderAt: now }); });
 }
 function stopGeo(){ if (geo !== null){ navigator.geolocation.clearWatch(geo); geo = null; } jobs = []; $("gps").textContent = ""; }
+function go(t){
+  ["vjobs", "vprofile"].forEach(function(x){ $(x).classList.toggle("hide", x !== t); });
+  document.querySelectorAll("#tabs button").forEach(function(b){ b.classList.toggle("on", b.dataset.t === t); });
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("#tabs button").forEach(function(b){ b.onclick = function(){ go(b.dataset.t); }; });
+$("out2").onclick = function(){ auth.signOut(); };
 </script>
 </body>
 </html>
