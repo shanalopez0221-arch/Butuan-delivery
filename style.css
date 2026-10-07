@@ -23,7 +23,7 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid v
 .job p{margin:4px 0}
 .err{color:#b3261e;font-weight:600}
 a{color:inherit}
-.proof{width:100%;max-height:260px;object-fit:cover;border-radius:10px;margin:6px 0 0}
+.proof{width:100%;max-height:260px;object-fit:contain;background:rgba(127,127,127,.15);cursor:zoom-in;border-radius:10px;margin:6px 0 0}
 input[type=checkbox]{width:auto;margin-right:8px;margin-top:4px}
 .chk{display:flex;align-items:flex-start;font-weight:400;font-size:.9rem}
 .hide{display:none}
@@ -33,3 +33,4 @@ input[type=checkbox]{width:auto;margin-right:8px;margin-top:4px}
 #map{flex:1;min-height:0}
 #mapbar{padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--card)}
 #mapbar p{grid-column:1/-1;margin:0;font-weight:600}
+.proof.big{max-height:none}

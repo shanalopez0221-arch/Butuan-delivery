@@ -21,19 +21,50 @@
   <p id="lmsg" class="err" role="status"></p>
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
+<datalist id="riderlist"></datalist>
+<div id="arids"></div>
 <div id="aids"></div>
 <div id="ajobs"></div>
 </main>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js">function watchRiderApps(){
+  if (unsubs.rids) return;
+  var box = $("arids");
+  unsubs.rids = db.collection("riders").where("status", "==", "pending").onSnapshot(function(sn){
+    box.textContent = "";
+    sn.forEach(function(d){
+      var u = d.data(), c = el("div", null, "box job");
+      c.appendChild(el("b", "Rider application: " + u.name));
+      c.appendChild(el("p", u.phone + " · " + u.email));
+      c.appendChild(el("p", "Plate number: " + u.plate));
+      [["license", "Driver's license"], ["orPhoto", "OR (Official Receipt)"], ["crPhoto", "CR (Certificate of Registration)"], ["front", "Motorcycle front"], ["back", "Motorcycle back"]].forEach(function(p){
+        c.appendChild(el("p", p[1] + " (tap to enlarge)", "hint"));
+        var im = el("img", null, "proof"); im.src = u[p[0]]; im.alt = p[1] + " of " + u.name; c.appendChild(im);
+      });
+      var ok = el("button", "Approve rider", "sm"), no = el("button", "Reject", "sm"); ok.type = "button"; no.type = "button";
+      ok.onclick = function(){ d.ref.update({ status: "approved" }); };
+      no.onclick = function(){ d.ref.update({ status: "rejected" }); };
+      c.appendChild(ok); c.appendChild(document.createTextNode(" ")); c.appendChild(no); box.appendChild(c);
+    });
+    if (!box.firstChild) box.appendChild(el("p", "No rider applications waiting.", "box hint"));
+  }, fail(box));
+}
+function watchApprovedRiders(){
+  if (unsubs.arl) return;
+  unsubs.arl = db.collection("riders").where("status", "==", "approved").onSnapshot(function(sn){
+    var dl = $("riderlist"); dl.textContent = "";
+    sn.forEach(function(d){ var u = d.data(), o = el("option", u.name + " " + u.plate); o.value = u.email; dl.appendChild(o); });
+  });
+}
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="shared.js"></script>
 <script>
 startAuth(function(u){
-  var box = $("ajobs"); $("aids").textContent = ""; box.textContent = ""; box.classList.remove("box", "err");
+  var box = $("ajobs"); $("arids").textContent = ""; $("aids").textContent = ""; box.textContent = ""; box.classList.remove("box", "err");
   if (!u) return;
   if (!isAdmin()){ box.textContent = "This account is not the admin."; box.classList.add("box", "err"); return; }
-  watchIds(); watchAdmin();
+  watchRiderApps(); watchApprovedRiders(); watchIds(); watchAdmin();
 });
 function watchIds(){
   if (unsubs.ids) return;

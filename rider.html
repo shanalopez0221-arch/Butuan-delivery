@@ -13,6 +13,26 @@
   <p>Your jobs. Take a photo at pickup and at delivery.</p>
 </header>
 <main>
+<form id="rsignup" class="box hide" novalidate>
+  <b>Apply to be a rider</b>
+  <p class="hint">Upload clear photos. The admin checks your documents before you can take jobs.</p>
+  <label for="rn">Full name</label><input id="rn" autocomplete="name">
+  <label for="rp">Mobile number</label><input id="rp" type="tel" inputmode="tel" autocomplete="tel">
+  <label for="re">Email</label><input id="re" type="email" autocomplete="email">
+  <label for="rpw">Password (6 or more characters)</label><input id="rpw" type="password" autocomplete="new-password">
+  <label for="rpl">Motorcycle plate number</label><input id="rpl" autocapitalize="characters">
+  <div id="docs-signup"></div>
+  <label class="chk"><input id="rc" type="checkbox">I agree that Butuan Delivery keeps my documents to check my application. Only the admin can see them.</label>
+  <button class="go" type="submit">Send application</button>
+  <p id="rmsg" class="err" role="status"></p>
+</form>
+<div id="rstate" class="box hide">
+  <p id="rst"></p>
+  <form id="rredo" class="hide" novalidate>
+    <div id="docs-redo"></div>
+    <button class="sm" type="submit">Send documents again</button>
+  </form>
+</div>
 <form id="login" class="box hide" novalidate>
   <b>Sign in</b>
   <label for="em">Email</label><input id="em" type="email" autocomplete="username">
@@ -21,16 +41,69 @@
   <p id="lmsg" class="err" role="status"></p>
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
-<div id="rjobs"></div>
+<div id="rjobs" class="hide"></div>
 </main>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="shared.js"></script>
 <script>
+var DOCS = [["license", "Driver's license"], ["orPhoto", "OR (Official Receipt)"], ["crPhoto", "CR (Certificate of Registration)"], ["front", "Motorcycle front, plate number visible"], ["back", "Motorcycle back, plate number visible"]];
+var LIMIT = 170000, rid = null, loaded = false, busy = false;
+function buildDocs(box, p){
+  DOCS.forEach(function(d){
+    var l = el("label", d[1]), i = el("input"); l.htmlFor = p + d[0]; i.type = "file"; i.accept = "image/*"; i.id = p + d[0];
+    box.appendChild(l); box.appendChild(i);
+  });
+}
+buildDocs($("docs-signup"), "s_"); buildDocs($("docs-redo"), "r_");
+function hasDocs(p){ return DOCS.every(function(d){ return $(p + d[0]).files[0]; }); }
+function readDocs(p){
+  return Promise.all(DOCS.map(function(d){ return squeezeTo($(p + d[0]).files[0], LIMIT); })).then(function(urls){
+    var o = {}; DOCS.forEach(function(d, i){ o[d[0]] = urls[i]; }); return o;
+  });
+}
+function role(){ if (!user) return "none"; if (isAdmin()) return "admin"; if (busy || !loaded) return "loading"; return rid ? "rider" : "nodoc"; }
+function refresh(){
+  var r = role(), ok = r === "rider" && rid.status === "approved";
+  $("rsignup").classList.toggle("hide", !!user);
+  var note = r === "admin" ? "This is the admin account. Use a rider account on this page." :
+    r === "nodoc" ? "This account has no rider application. Sign out and apply with a different email." :
+    r === "rider" && rid.status === "pending" ? "Your documents are being reviewed. You can take jobs as soon as the admin approves you." :
+    r === "rider" && rid.status === "rejected" ? "Your application was not approved. Send clearer photos of all 5 documents." : "";
+  $("rst").textContent = note;
+  $("rstate").classList.toggle("hide", !note);
+  $("rredo").classList.toggle("hide", !(r === "rider" && rid.status === "rejected"));
+  $("rjobs").classList.toggle("hide", !ok);
+  if (ok) watchRider(); else { stop("rider"); $("rjobs").textContent = ""; }
+}
 startAuth(function(u){
-  var box = $("rjobs"); box.textContent = ""; box.classList.remove("box", "err");
-  if (u) watchRider();
+  rid = null; loaded = false;
+  if (u && !isAdmin()) unsubs.me = db.collection("riders").doc(u.uid).onSnapshot(function(d){ rid = d.exists ? d.data() : null; loaded = true; refresh(); }, function(){ loaded = true; refresh(); });
+  refresh();
+});
+$("rsignup").addEventListener("submit", function(e){
+  e.preventDefault();
+  var g = function(i){ return $(i).value.trim(); }, m = $("rmsg"), docs;
+  if (!g("rn") || !g("rp") || !g("re") || !g("rpl") || $("rpw").value.length < 6 || !hasDocs("s_")){ m.className = "err"; m.textContent = "Fill in every field, use a password of 6 or more characters, and add all 5 photos."; return; }
+  if (!$("rc").checked){ m.className = "err"; m.textContent = "Please agree to the document check first."; return; }
+  busy = true; m.className = "hint"; m.textContent = "Sending your application. This can take a minute…";
+  readDocs("s_").then(function(o){ docs = o; return auth.createUserWithEmailAndPassword(g("re"), $("rpw").value); })
+    .then(function(cr){
+      var data = { name: g("rn"), phone: g("rp"), email: g("re").toLowerCase(), plate: g("rpl").toUpperCase(), status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+      DOCS.forEach(function(d){ data[d[0]] = docs[d[0]]; });
+      return db.collection("riders").doc(cr.user.uid).set(data);
+    })
+    .then(function(){ m.textContent = ""; $("rsignup").reset(); })
+    .catch(function(err){ m.className = "err"; m.textContent = err && err.code === "auth/email-already-in-use" ? "That email is already registered. Sign in below." : "Could not send the application. Check your details and internet."; })
+    .then(function(){ busy = false; refresh(); });
+});
+$("rredo").addEventListener("submit", function(e){
+  e.preventDefault();
+  if (!hasDocs("r_")){ $("rst").textContent = "Add all 5 photos."; return; }
+  $("rst").textContent = "Sending…";
+  readDocs("r_").then(function(o){ o.status = "pending"; return db.collection("riders").doc(user.uid).update(o); })
+    .catch(function(){ $("rst").textContent = "Could not send. Try again."; });
 });
 function watchRider(){
   if (unsubs.rider) return;

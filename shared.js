@@ -81,7 +81,7 @@ function card(d, mode){
   if (b.note) c.appendChild(el("p", "Note: " + b.note, "hint"));
   if (mode === "admin"){
     if (b.status === "new" || b.status === "assigned"){
-      var i = el("input"); i.type = "email"; i.placeholder = "Rider email"; i.value = b.riderEmail || ""; c.appendChild(i);
+      var i = el("input"); i.type = "email"; i.placeholder = "Rider email"; i.setAttribute("list", "riderlist"); i.value = b.riderEmail || ""; c.appendChild(i);
       var g = el("button", b.riderEmail ? "Change rider" : "Assign rider", "sm"); g.type = "button";
       g.onclick = function(){ var r = i.value.trim().toLowerCase(); if (r) d.ref.update({ riderEmail: r, status: "assigned" }); };
       c.appendChild(g);
@@ -100,3 +100,11 @@ function draw(box, snap, mode, empty){
 }
 function fail(box){ return function(){ box.textContent = "Could not load jobs. Check your internet and Firebase rules."; box.classList.add("box", "err"); }; }
 
+
+// Shrink a photo until it fits under limit characters (keeps documents readable)
+function squeezeTo(file, limit, i){
+  i = i || 0; var t = [[900, 0.65], [800, 0.55], [700, 0.45], [600, 0.4]][i];
+  return squeeze(file, t[0], t[1]).then(function(u){ return (u.length <= limit || i >= 3) ? u : squeezeTo(file, limit, i + 1); });
+}
+// Tap any photo to enlarge it, tap again to shrink
+document.addEventListener("click", function(e){ if (e.target.classList && e.target.classList.contains("proof")) e.target.classList.toggle("big"); });
