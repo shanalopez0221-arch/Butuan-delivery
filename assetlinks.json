@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.daligo",
+        "sha256_cert_fingerprints": ["98:4C:E3:36:CB:66:41:EC:23:88:12:B3:FC:F3:71:F1:6F:E4:48:64:DA:13:9B:83:11:2E:F0:7E:16:18:C4:9B"]
+      }
+    }]
