@@ -32,6 +32,9 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid v
 .job p{margin:4px 0}
 .err{color:#b3261e;font-weight:600}
 a{color:inherit}
+.proof{width:100%;max-height:260px;object-fit:cover;border-radius:10px;margin:6px 0 0}
+input[type=checkbox]{width:auto;margin-right:8px;margin-top:4px}
+.chk{display:flex;align-items:flex-start;font-weight:400;font-size:.9rem}
 .hide{display:none}
 .pin{width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--teal);background:transparent;color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
 #mapbox{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -52,7 +55,28 @@ a{color:inherit}
 </header>
 <main>
 <section id="book">
-  <form id="f" class="box" novalidate>
+  <form id="signup" class="box hide" novalidate>
+    <b>Create a customer account</b>
+    <p class="hint">We check a valid ID before your first booking.</p>
+    <label for="sn">Full name</label><input id="sn" autocomplete="name">
+    <label for="sp">Mobile number</label><input id="sp" type="tel" inputmode="tel" autocomplete="tel">
+    <label for="se">Email</label><input id="se" type="email" autocomplete="email">
+    <label for="spw">Password (6 or more characters)</label><input id="spw" type="password" autocomplete="new-password">
+    <label for="st">Type of ID</label>
+    <select id="st"><option>Driver's license</option><option>PhilSys ID</option><option>Passport</option><option>UMID</option><option>Postal ID</option><option>Voter's ID</option><option>Other government ID</option></select>
+    <label for="sid">Clear photo of your ID</label><input id="sid" type="file" accept="image/*">
+    <label class="chk"><input id="sc" type="checkbox">I agree that Butuan Delivery keeps my ID photo to verify my account. Only the admin can see it.</label>
+    <button class="go" type="submit">Create account</button>
+    <p id="smsg" class="err" role="status"></p>
+  </form>
+  <div id="cstate" class="box hide">
+    <p id="cst"></p>
+    <div id="redo" class="hide">
+      <input id="rfile" type="file" accept="image/*">
+      <button class="sm" id="rsend" type="button">Send ID again</button>
+    </div>
+  </div>
+  <form id="f" class="box hide" novalidate>
     <label for="name">Your name</label><input id="name" autocomplete="name">
     <label for="phone">Mobile number</label><input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="09XX XXX XXXX">
     <label for="pu">Pickup address</label><input id="pu" placeholder="Barangay, street, or landmark">
@@ -71,10 +95,10 @@ a{color:inherit}
     <button class="go" type="submit">Book a rider</button>
     <p id="msg" role="status"></p>
   </form>
-  <div id="track" class="box hide"></div>
+  <div id="mine" class="hide"></div>
 </section>
 <form id="login" class="box hide" novalidate>
-  <b>Staff sign in</b>
+  <b>Sign in</b>
   <label for="em">Email</label><input id="em" type="email" autocomplete="username">
   <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
   <button class="go" type="submit">Sign in</button>
@@ -82,7 +106,7 @@ a{color:inherit}
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
 <section id="rider" class="hide"><div id="rjobs"></div></section>
-<section id="admin" class="hide"><div id="ajobs"></div></section>
+<section id="admin" class="hide"><div id="aids"></div><div id="ajobs"></div></section>
 </main>
 <div id="mapbox" class="hide">
   <div id="map"></div>
@@ -113,7 +137,8 @@ var CONFIG = {
 };
 // ======================
 firebase.initializeApp(CONFIG.firebase);
-var col = firebase.firestore().collection("bookings");
+var db = firebase.firestore();
+var col = db.collection("bookings");
 var auth = firebase.auth();
 var $ = function(i){ return document.getElementById(i); };
 var LABEL = { new: "Waiting for rider", assigned: "Rider assigned", picked_up: "Picked up", delivered: "Delivered" };
@@ -128,31 +153,118 @@ function render(){ $("fare").textContent = "₱" + fare(); }
 ["km","size"].forEach(function(i){ $(i).addEventListener("input", render); });
 render();
 
-// ---- tabs and login ----
+// ---- accounts, tabs, photos ----
+var cust = null, loaded = false, busy = false;
 function isAdmin(){ return user && user.email.toLowerCase() === CONFIG.adminEmail.toLowerCase(); }
 function stop(k){ if (unsubs[k]){ unsubs[k](); unsubs[k] = null; } }
+function role(){ if (!user) return "none"; if (isAdmin()) return "admin"; if (busy || !loaded) return "loading"; return cust ? "customer" : "staff"; }
 function show(v){ view = v; refresh(); }
+function prefill(){ if (cust){ if (!$("name").value) $("name").value = cust.name; if (!$("phone").value) $("phone").value = cust.phone; } }
 function refresh(){
-  var staff = view !== "book";
+  var r = role(), inBook = view === "book", ok = r === "customer" && cust.status === "approved";
   ["book","rider","admin"].forEach(function(x){ $(x).classList.toggle("hide", x !== view || (x !== "book" && !user)); });
-  $("login").classList.toggle("hide", !staff || !!user);
-  $("who").classList.toggle("hide", !staff || !user);
+  $("login").classList.toggle("hide", !!user);
+  $("signup").classList.toggle("hide", !!user || !inBook);
+  $("who").classList.toggle("hide", !user);
   document.querySelectorAll("nav button").forEach(function(b){ b.classList.toggle("on", b.dataset.v === view); });
-  if (!user){ stop("admin"); stop("rider"); return; }
+  var note = !inBook ? "" : r === "staff" || r === "admin" ? "This is a staff account. Use a separate customer account to book." :
+    r === "customer" && cust.status === "pending" ? "Your ID is being checked. You can book as soon as the admin approves it." :
+    r === "customer" && cust.status === "rejected" ? "Your ID was not approved. Send a clearer photo of a valid ID." : "";
+  $("cst").textContent = note;
+  $("cstate").classList.toggle("hide", !note);
+  $("redo").classList.toggle("hide", !(r === "customer" && cust.status === "rejected"));
+  $("f").classList.toggle("hide", !(inBook && ok));
+  $("mine").classList.toggle("hide", !(inBook && r === "customer"));
+  if (ok) prefill();
+  if (!user){ ["admin","ids","rider","mine"].forEach(stop); return; }
   $("whotxt").textContent = "Signed in as " + user.email + ". ";
+  if (r === "customer") watchMine(); else stop("mine");
   if (view === "admin"){
-    if (isAdmin()) watchAdmin(); else { $("admin").classList.remove("hide"); $("ajobs").textContent = "This account is not the admin."; $("ajobs").className = "box err"; }
+    if (isAdmin()){ watchAdmin(); watchIds(); } else { $("ajobs").textContent = "This account is not the admin."; $("ajobs").className = "box err"; }
   }
   if (view === "rider") watchRider();
 }
 document.querySelectorAll("nav button").forEach(function(b){ b.onclick = function(){ show(b.dataset.v); }; });
-auth.onAuthStateChanged(function(u){ user = u; refresh(); });
+auth.onAuthStateChanged(function(u){
+  ["admin","ids","rider","mine","me"].forEach(stop);
+  user = u; cust = null; loaded = false;
+  if (u && !isAdmin()) unsubs.me = db.collection("users").doc(u.uid).onSnapshot(function(d){ cust = d.exists ? d.data() : null; loaded = true; refresh(); }, function(){ loaded = true; refresh(); });
+  refresh();
+});
 $("login").addEventListener("submit", function(e){
   e.preventDefault(); $("lmsg").textContent = "";
   auth.signInWithEmailAndPassword($("em").value.trim(), $("pw").value).then(function(){ $("pw").value = ""; })
     .catch(function(){ $("lmsg").textContent = "Wrong email or password."; });
 });
 $("out").onclick = function(){ auth.signOut(); };
+
+function squeeze(file, max, q){
+  return new Promise(function(ok, no){
+    var img = new Image(), u = URL.createObjectURL(file);
+    img.onload = function(){
+      var k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+      ok(c.toDataURL("image/jpeg", q));
+    };
+    img.onerror = no; img.src = u;
+  });
+}
+$("signup").addEventListener("submit", function(e){
+  e.preventDefault();
+  var g = function(i){ return $(i).value.trim(); }, m = $("smsg"), file = $("sid").files[0], photo;
+  if (!g("sn") || !g("sp") || !g("se") || $("spw").value.length < 6 || !file){ m.className = "err"; m.textContent = "Fill in every field, use a password of 6 or more characters, and add a photo of your ID."; return; }
+  if (!$("sc").checked){ m.className = "err"; m.textContent = "Please agree to the ID check first."; return; }
+  busy = true; m.className = "hint"; m.textContent = "Creating your account…";
+  squeeze(file, 1000, 0.7).then(function(url){ photo = url; return auth.createUserWithEmailAndPassword(g("se"), $("spw").value); })
+    .then(function(cr){ return db.collection("users").doc(cr.user.uid).set({ name: g("sn"), phone: g("sp"), email: g("se").toLowerCase(), idType: $("st").value, idPhoto: photo, status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp() }); })
+    .then(function(){ m.textContent = ""; $("signup").reset(); })
+    .catch(function(err){ m.className = "err"; m.textContent = err && err.code === "auth/email-already-in-use" ? "That email is already registered. Sign in below." : "Could not create the account. Check your details and internet."; })
+    .then(function(){ busy = false; refresh(); });
+});
+$("rsend").onclick = function(){
+  var f = $("rfile").files[0]; if (!f) return;
+  squeeze(f, 1000, 0.7).then(function(url){ return db.collection("users").doc(user.uid).update({ idPhoto: url, status: "pending" }); })
+    .catch(function(){ $("cst").textContent = "Could not send. Try again."; });
+};
+function proofBtn(text, field, status, d){
+  var l = el("label", null, "sm"), t = el("span", text), f = el("input");
+  l.style.display = "inline-block"; f.type = "file"; f.accept = "image/*"; f.setAttribute("capture", "environment"); f.hidden = true;
+  f.onchange = function(){
+    if (!f.files[0]) return; t.textContent = "Uploading…";
+    squeeze(f.files[0], 720, 0.6).then(function(url){ var u = { status: status }; u[field] = url; return d.ref.update(u); })
+      .catch(function(){ t.textContent = "Upload failed. Tap to try again."; });
+  };
+  l.appendChild(t); l.appendChild(f); return l;
+}
+function ts(d){ var t = d.data().createdAt; return t ? t.toMillis() : Infinity; }
+function watchMine(){
+  if (unsubs.mine) return;
+  var box = $("mine");
+  unsubs.mine = col.where("customerUid", "==", user.uid).onSnapshot(function(sn){
+    var docs = sn.docs.slice().sort(function(a, b){ return ts(b) - ts(a); });
+    draw(box, { forEach: function(fn){ docs.forEach(fn); } }, "customer", "No bookings yet.");
+  }, fail(box));
+}
+function watchIds(){
+  if (unsubs.ids) return;
+  var box = $("aids");
+  unsubs.ids = db.collection("users").where("status", "==", "pending").onSnapshot(function(sn){
+    box.textContent = "";
+    sn.forEach(function(d){
+      var u = d.data(), c = el("div", null, "box job");
+      c.appendChild(el("b", "ID check: " + u.name));
+      c.appendChild(el("p", u.phone + " · " + u.email));
+      c.appendChild(el("p", u.idType, "hint"));
+      var im = el("img", null, "proof"); im.src = u.idPhoto; im.alt = "ID photo of " + u.name; c.appendChild(im);
+      var ok = el("button", "Approve", "sm"), no = el("button", "Reject", "sm"); ok.type = "button"; no.type = "button";
+      ok.onclick = function(){ d.ref.update({ status: "approved" }); };
+      no.onclick = function(){ d.ref.update({ status: "rejected" }); };
+      c.appendChild(ok); c.appendChild(document.createTextNode(" ")); c.appendChild(no); box.appendChild(c);
+    });
+    if (!box.firstChild) box.appendChild(el("p", "No IDs waiting for review.", "box hint"));
+  }, fail(box));
+}
 
 // ---- map pins ----
 var pins = { pu: null, do: null }, map = null, marker = null, target = null, temp = null;
@@ -226,7 +338,7 @@ $("f").addEventListener("submit", function(e){
     $("msg").className = "err"; $("msg").textContent = "Fill in your name, number, pickup, and drop-off first."; return;
   }
   $("msg").className = ""; $("msg").textContent = "Sending…";
-  var data = {
+  var data = { customerUid: user.uid,
     name: v("name"), phone: v("phone"), pickup: v("pu"), dropoff: v("do"), km: parseFloat($("km").value) || 1,
     size: $("size").selectedOptions[0].text, pay: $("pay").value, note: v("note"), fare: fare(),
     status: "new", riderEmail: "", createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -234,21 +346,9 @@ $("f").addEventListener("submit", function(e){
   if (pins.pu){ data.puLat = pins.pu[0]; data.puLng = pins.pu[1]; }
   if (pins.do){ data.doLat = pins.do[0]; data.doLng = pins.do[1]; }
   col.add(data).then(function(ref){
-    $("msg").textContent = ""; $("f").reset(); pins = { pu: null, do: null }; auto = { pu: "", do: "" }; $("pu-ok").textContent = ""; $("do-ok").textContent = ""; $("kmnote").textContent = ""; render(); watchTrack(ref.id);
+    $("msg").textContent = ""; $("f").reset(); pins = { pu: null, do: null }; auto = { pu: "", do: "" }; $("pu-ok").textContent = ""; $("do-ok").textContent = ""; $("kmnote").textContent = ""; render(); prefill(); $("msg").textContent = "Booking sent. Track it below.";
   }).catch(function(){ $("msg").className = "err"; $("msg").textContent = "Could not send. Check your internet and try again."; });
 });
-function watchTrack(id){
-  var t = $("track"); t.classList.remove("hide");
-  if (unsubs.track) unsubs.track();
-  unsubs.track = col.doc(id).onSnapshot(function(d){
-    var b = d.data(); if (!b) return;
-    t.textContent = "";
-    t.appendChild(el("b", "Booking sent. Fare: ₱" + b.fare));
-    var p = el("p"); p.appendChild(el("span", LABEL[b.status], "st")); t.appendChild(p);
-    t.appendChild(el("p", b.pickup + " to " + b.dropoff, "hint"));
-  });
-}
-
 // ---- job cards (admin and rider) ----
 function card(d, mode){
   var b = d.data(), c = el("div", null, "box job");
@@ -260,6 +360,9 @@ function card(d, mode){
   if (b.puLat != null && b.doLat != null) url = "https://www.google.com/maps/dir/?api=1&origin=" + b.puLat + "," + b.puLng + "&destination=" + b.doLat + "," + b.doLng;
   else if (b.puLat != null) url = "https://www.google.com/maps/search/?api=1&query=" + b.puLat + "," + b.puLng;
   if (url){ var mp = el("p"), ma = el("a", b.doLat != null ? "Open route in Maps" : "Open pickup in Maps"); ma.href = url; ma.target = "_blank"; ma.rel = "noopener"; mp.appendChild(ma); c.appendChild(mp); }
+  [["pickupPhoto", "Pickup proof"], ["deliveryPhoto", "Delivery proof"]].forEach(function(p){
+    if (b[p[0]]){ c.appendChild(el("p", p[1], "hint")); var im = el("img", null, "proof"); im.src = b[p[0]]; im.alt = p[1]; c.appendChild(im); }
+  });
   if (b.note) c.appendChild(el("p", "Note: " + b.note, "hint"));
   if (mode === "admin"){
     if (b.status === "new" || b.status === "assigned"){
@@ -268,27 +371,27 @@ function card(d, mode){
       g.onclick = function(){ var r = i.value.trim().toLowerCase(); if (r) d.ref.update({ riderEmail: r, status: "assigned" }); };
       c.appendChild(g);
     } else if (b.riderEmail) c.appendChild(el("p", "Rider: " + b.riderEmail));
-  } else {
-    var next = b.status === "assigned" ? ["picked_up", "Mark picked up"] : b.status === "picked_up" ? ["delivered", "Mark delivered"] : null;
-    if (next){ var n = el("button", next[1], "sm"); n.type = "button"; n.onclick = function(){ d.ref.update({ status: next[0] }); }; c.appendChild(n); }
+  } else if (mode === "rider") {
+    if (b.status === "assigned") c.appendChild(proofBtn("Take pickup photo", "pickupPhoto", "picked_up", d));
+    else if (b.status === "picked_up") c.appendChild(proofBtn("Take delivery photo", "deliveryPhoto", "delivered", d));
   }
   return c;
 }
 function draw(box, snap, mode, empty){
-  box.textContent = "";
+  box.textContent = ""; box.classList.remove("box", "err");
   var n = 0;
   snap.forEach(function(d){ if (mode === "rider" && d.data().status === "delivered") return; box.appendChild(card(d, mode)); n++; });
   if (!n) box.appendChild(el("p", empty, "box hint"));
 }
-function fail(box){ return function(){ box.textContent = "Could not load jobs. Check your internet and Firebase rules."; box.className = "box err"; }; }
+function fail(box){ return function(){ box.textContent = "Could not load jobs. Check your internet and Firebase rules."; box.classList.add("box", "err"); }; }
 
 function watchAdmin(){
   if (unsubs.admin) return;
   var box = $("ajobs");
-  unsubs.admin = col.orderBy("createdAt", "desc").limit(50).onSnapshot(function(s){ draw(box, s, "admin", "No bookings yet."); }, fail(box));
+  unsubs.admin = col.orderBy("createdAt", "desc").limit(30).onSnapshot(function(s){ draw(box, s, "admin", "No bookings yet."); }, fail(box));
 }
 function watchRider(){
-  stop("rider");
+  if (unsubs.rider) return;
   var box = $("rjobs");
   unsubs.rider = col.where("riderEmail", "==", user.email.toLowerCase()).onSnapshot(function(sn){ draw(box, sn, "rider", "No jobs for you right now."); }, fail(box));
 }
