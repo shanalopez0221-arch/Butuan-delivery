@@ -34,3 +34,6 @@ input[type=checkbox]{width:auto;margin-right:8px;margin-top:4px}
 #mapbar{padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--card)}
 #mapbar p{grid-column:1/-1;margin:0;font-weight:600}
 .proof.big{max-height:none}
+.prog{display:flex;gap:4px;margin:8px 0}
+.prog i{flex:1;height:5px;border-radius:3px;background:var(--line)}
+.prog i.on{background:var(--sun)}

@@ -69,7 +69,10 @@ function card(d, mode){
   var b = d.data(), c = el("div", null, "box job");
   c.appendChild(el("b", b.pickup + " to " + b.dropoff));
   var s = el("p"); s.appendChild(el("span", LABEL[b.status] || b.status, "st")); c.appendChild(s);
-  c.appendChild(el("p", "₱" + b.fare + " · " + b.pay + " · " + b.size + " · " + b.km + " km"));
+  var pr = el("div", null, "prog"), n = ["new", "assigned", "picked_up", "delivered"].indexOf(b.status) + 1;
+  for (var k = 0; k < 4; k++) pr.appendChild(el("i", null, k < n ? "on" : ""));
+  c.appendChild(pr);
+  c.appendChild(el("p", (b.cat ? b.cat + " · " : "") + "₱" + b.fare + " · " + b.pay + " · " + b.size + " · " + b.km + " km"));
   var ph = el("p"); var a = el("a", b.name + " " + b.phone); a.href = "tel:" + b.phone; ph.appendChild(a); c.appendChild(ph);
   var url = null;
   if (b.puLat != null && b.doLat != null) url = "https://www.google.com/maps/dir/?api=1&origin=" + b.puLat + "," + b.puLng + "&destination=" + b.doLat + "," + b.doLng;

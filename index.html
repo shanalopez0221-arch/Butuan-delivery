@@ -3,19 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Butuan Delivery</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<title>DALIGO</title>
+<meta name="theme-color" content="#12318A">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,800;1,600;1,900&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="daligo.css">
 </head>
 <body>
-<header>
-  <h1>Butuan Delivery</h1>
-  <p>Book a rider for parcels, food, and documents anywhere in Butuan City.</p>
+<header class="top">
+  <div style="width:44px"></div>
+  <div class="logo"><div class="w"><svg width="34" height="22" viewBox="0 0 34 22" aria-hidden="true"><g fill="#FFC31A"><rect x="0" y="2" width="22" height="4" rx="2"/><rect x="7" y="9" width="22" height="4" rx="2"/><rect x="0" y="16" width="16" height="4" rx="2"/></g></svg><span>DALI<b>GO</b></span></div><p>Padala. <b>Pickup. Dalihin.</b></p></div>
+  <div class="av hide" id="avatar"><i id="av">D</i><span id="avn"></span></div>
 </header>
 <main>
-
-  <form id="signup" class="box hide" novalidate>
+<form id="signup" class="box hide" novalidate>
     <b>Create a customer account</b>
     <p class="hint">We check a valid ID before your first booking.</p>
     <label for="sn">Full name</label><input id="sn" autocomplete="name">
@@ -29,33 +31,13 @@
     <button class="go" type="submit">Create account</button>
     <p id="smsg" class="err" role="status"></p>
   </form>
-  <div id="cstate" class="box hide">
-    <p id="cst"></p>
-    <div id="redo" class="hide">
-      <input id="rfile" type="file" accept="image/*">
-      <button class="sm" id="rsend" type="button">Send ID again</button>
-    </div>
+<div id="cstate" class="box hide">
+  <p id="cst"></p>
+  <div id="redo" class="hide">
+    <input id="rfile" type="file" accept="image/*">
+    <button class="sm" id="rsend" type="button">Send ID again</button>
   </div>
-  <form id="f" class="box hide" novalidate>
-    <label for="name">Your name</label><input id="name" autocomplete="name">
-    <label for="phone">Mobile number</label><input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="09XX XXX XXXX">
-    <label for="pu">Pickup address</label><input id="pu" placeholder="Barangay, street, or landmark">
-    <button class="pin" type="button" data-pin="pu">Pin pickup on map</button><p class="hint" id="pu-ok"></p>
-    <label for="do">Drop-off address</label><input id="do" placeholder="Barangay, street, or landmark">
-    <button class="pin" type="button" data-pin="do">Pin drop-off on map</button><p class="hint" id="do-ok"></p>
-    <label for="km">Estimated distance (km)</label><input id="km" type="number" inputmode="decimal" min="1" step="0.5" value="3">
-    <p class="hint" id="kmnote"></p>
-    <div class="row">
-      <div><label for="size">Item size</label><select id="size"><option value="0">Small (bag)</option><option value="30">Medium (box)</option><option value="80">Large (sack)</option></select></div>
-      <div><label for="pay">Payment</label><select id="pay"><option>Cash</option><option>GCash</option></select></div>
-    </div>
-    <label for="note">Note for the rider</label><textarea id="note" rows="2" placeholder="Who to call, what to pick up"></textarea>
-    <div class="fare"><span>Estimated fare</span><b id="fare">₱0</b></div>
-    <p class="hint">The dispatcher confirms the final fare.</p>
-    <button class="go" type="submit">Book a rider</button>
-    <p id="msg" role="status"></p>
-  </form>
-  <div id="mine" class="hide"></div>
+</div>
 <form id="login" class="box hide" novalidate>
   <b>Sign in</b>
   <label for="em">Email</label><input id="em" type="email" autocomplete="username">
@@ -64,7 +46,76 @@
   <p id="lmsg" class="err" role="status"></p>
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
+<div id="app" class="hide">
+  <section id="vhome">
+    <h2 class="greet" id="greet">Good day!</h2>
+    <p class="loc">📍 Butuan City</p>
+    <div class="box">
+      <b class="q">Where do you want to send something?</b>
+      <button class="rt" type="button" id="rtp"><i class="d" style="background:var(--sun)"></i><span><b>Pickup location</b><small id="rtpt">Choose pickup location</small></span></button>
+      <button class="rt" type="button" id="rtd"><i class="d" style="background:var(--navy)"></i><span><b>Drop-off location</b><small id="rtdt">Choose drop-off location</small></span></button>
+      <button class="go" type="button" id="gobook" style="margin-top:14px">Book a rider</button>
+    </div>
+    <h3 class="sec">Quick Categories</h3>
+    <div class="cats">
+      <button type="button" data-cat="Parcel"><span>📦</span>Parcel</button>
+      <button type="button" data-cat="Food"><span>🥡</span>Food</button>
+      <button type="button" data-cat="Documents"><span>📁</span>Documents</button>
+      <button type="button" data-cat="Other"><span>➕</span>Other</button>
+    </div>
+    <h3 class="sec">Your recent deliveries</h3>
+    <div id="recent"></div>
+  </section>
+  <section id="vmine" class="hide"><h2 class="greet" style="margin-bottom:14px">Bookings</h2><div id="mine"></div></section>
+  <section id="vprofile" class="hide">
+    <h2 class="greet" style="margin-bottom:14px">Profile</h2>
+    <div class="box"><b id="pname"></b><p id="pinfo" class="hint"></p><p><span class="st">ID verified</span></p><button class="sm" id="out2" type="button">Sign out</button></div>
+  </section>
+</div>
 </main>
+<nav id="tabs" class="hide">
+  <button type="button" data-t="home" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v10H3z"/></svg>Home</button>
+  <button type="button" data-t="mine"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M8 14l3 3 5-6"/></svg>Bookings</button>
+  <button type="button" data-t="profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</button>
+</nav>
+<div id="vbook" class="screen hide">
+  <div class="bar"><button type="button" id="back" aria-label="Back">←</button><b>Book a Rider</b><span class="badge">DALIGO</span></div>
+  <form id="f" novalidate>
+    <input id="name" type="hidden"><input id="phone" type="hidden"><input id="cat" type="hidden" value="Parcel">
+    <div class="box">
+      <label for="pu">Pickup location</label><input id="pu" placeholder="Barangay, street, or landmark">
+      <button class="pin" type="button" data-pin="pu">Pin on map 🗺️</button><p class="hint" id="pu-ok"></p>
+      <label for="do">Drop-off location</label><input id="do" placeholder="Barangay, street, or landmark">
+      <button class="pin" type="button" data-pin="do">Pin on map 🗺️</button><p class="hint" id="do-ok"></p>
+    </div>
+    <div class="box">
+      <b class="q">Delivery details</b>
+      <p class="hint" id="catnote"></p>
+      <label for="km">Estimated distance (km)</label><input id="km" type="number" inputmode="decimal" min="1" step="0.5" value="3">
+      <p class="hint" id="kmnote"></p>
+      <label>Item size</label>
+      <div class="chips">
+        <button type="button" data-sel="size" data-i="0">Small<small>Bag</small></button>
+        <button type="button" data-sel="size" data-i="1">Medium<small>Box +₱30</small></button>
+        <button type="button" data-sel="size" data-i="2">Large<small>Sack +₱80</small></button>
+      </div>
+      <label>Payment method</label>
+      <div class="seg">
+        <button type="button" data-sel="pay" data-i="0">Cash</button>
+        <button type="button" data-sel="pay" data-i="1">GCash</button>
+      </div>
+      <select id="size" class="hide"><option value="0">Small (Bag)</option><option value="30">Medium (Box)</option><option value="80">Large (Sack)</option></select>
+      <select id="pay" class="hide"><option>Cash</option><option>GCash</option></select>
+      <label for="note">Rider instructions</label><textarea id="note" rows="2" placeholder="Who to call, what to pick up"></textarea>
+    </div>
+    <div class="foot">
+      <div class="amt">Estimated fare <b id="fare">₱0</b></div>
+      <p class="hint"><i>Final fare will be confirmed by the dispatcher.</i></p>
+      <button class="go" type="submit" style="margin-top:10px">Book a rider</button>
+      <p id="msg" role="status"></p>
+    </div>
+  </form>
+</div>
 <div id="mapbox" class="hide">
   <div id="map"></div>
   <div id="mapbar">
@@ -74,6 +125,7 @@
     <button class="pin" type="button" id="mapx" style="grid-column:1/-1;margin:0">Cancel</button>
   </div>
 </div>
+<div id="toast" class="hide" role="status"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -101,9 +153,17 @@ function refresh(){
   $("cst").textContent = note;
   $("cstate").classList.toggle("hide", !note);
   $("redo").classList.toggle("hide", !(r === "customer" && cust.status === "rejected"));
-  $("f").classList.toggle("hide", !ok);
-  $("mine").classList.toggle("hide", r !== "customer");
-  if (ok) prefill();
+  $("app").classList.toggle("hide", !ok);
+  $("tabs").classList.toggle("hide", !ok);
+  $("avatar").classList.toggle("hide", !ok);
+  $("who").classList.toggle("hide", !user || ok);
+  if (!ok) closeBook();
+  if (ok){
+    prefill();
+    var fn = cust.name.split(" ")[0];
+    $("av").textContent = fn.charAt(0).toUpperCase(); $("avn").textContent = fn; greet(fn);
+    $("pname").textContent = cust.name; $("pinfo").textContent = cust.phone + " · " + cust.email;
+  }
   if (r === "customer") watchMine(); else stop("mine");
 }
 startAuth(function(u){
@@ -134,6 +194,9 @@ function watchMine(){
   unsubs.mine = col.where("customerUid", "==", user.uid).onSnapshot(function(sn){
     var docs = sn.docs.slice().sort(function(a, b){ return ts(b) - ts(a); });
     draw(box, { forEach: function(fn){ docs.forEach(fn); } }, "customer", "No bookings yet.");
+    var rb = $("recent"); rb.textContent = "";
+    docs.slice(0, 3).forEach(function(d){ rb.appendChild(recentRow(d.data())); });
+    if (!docs.length) rb.appendChild(el("p", "No deliveries yet. Book your first rider!", "hint"));
   }, fail(box));
 }
 // ---- map pins ----
@@ -208,7 +271,7 @@ $("f").addEventListener("submit", function(e){
     $("msg").className = "err"; $("msg").textContent = "Fill in your name, number, pickup, and drop-off first."; return;
   }
   $("msg").className = ""; $("msg").textContent = "Sending…";
-  var data = { customerUid: user.uid,
+  var data = { customerUid: user.uid, cat: $("cat").value,
     name: v("name"), phone: v("phone"), pickup: v("pu"), dropoff: v("do"), km: parseFloat($("km").value) || 1,
     size: $("size").selectedOptions[0].text, pay: $("pay").value, note: v("note"), fare: fare(),
     status: "new", riderEmail: "", createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -216,9 +279,40 @@ $("f").addEventListener("submit", function(e){
   if (pins.pu){ data.puLat = pins.pu[0]; data.puLng = pins.pu[1]; }
   if (pins.do){ data.doLat = pins.do[0]; data.doLng = pins.do[1]; }
   col.add(data).then(function(ref){
-    $("msg").textContent = ""; $("f").reset(); pins = { pu: null, do: null }; auto = { pu: "", do: "" }; $("pu-ok").textContent = ""; $("do-ok").textContent = ""; $("kmnote").textContent = ""; render(); prefill(); $("msg").textContent = "Booking sent. Track it below.";
+    $("msg").textContent = ""; $("f").reset(); pins = { pu: null, do: null }; auto = { pu: "", do: "" }; $("pu-ok").textContent = ""; $("do-ok").textContent = ""; $("kmnote").textContent = ""; render(); prefill(); syncChips(); closeBook(); go("mine"); toast("Booking sent. We will assign a rider soon.");
   }).catch(function(){ $("msg").className = "err"; $("msg").textContent = "Could not send. Check your internet and try again."; });
 });
+// ---- DALIGO screens ----
+function greet(fn){ var h = new Date().getHours(); $("greet").textContent = (h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening") + ", " + fn + "!"; }
+function go(t){
+  ["home", "mine", "profile"].forEach(function(x){ $("v" + x).classList.toggle("hide", x !== t); });
+  document.querySelectorAll("#tabs button").forEach(function(b){ b.classList.toggle("on", b.dataset.t === t); });
+  window.scrollTo(0, 0);
+}
+function routeText(){ $("rtpt").textContent = $("pu").value.trim() || "Choose pickup location"; $("rtdt").textContent = $("do").value.trim() || "Choose drop-off location"; }
+function openBook(cat){
+  if (cat) $("cat").value = cat;
+  $("catnote").textContent = "Sending: " + $("cat").value;
+  $("vbook").classList.remove("hide"); document.body.style.overflow = "hidden";
+}
+function closeBook(){ $("vbook").classList.add("hide"); document.body.style.overflow = ""; routeText(); }
+function syncChips(){
+  document.querySelectorAll("[data-sel]").forEach(function(b){ b.classList.toggle("on", $(b.dataset.sel).selectedIndex === +b.dataset.i); });
+}
+function toast(t){ var x = $("toast"); x.textContent = t; x.classList.remove("hide"); setTimeout(function(){ x.classList.add("hide"); }, 3500); }
+function recentRow(b){
+  var r = el("div", null, "rc"), l = el("div"), rt = el("div");
+  l.appendChild(el("b", (b.cat || "Parcel") + " delivery")); l.appendChild(el("p", b.pickup + " → " + b.dropoff, "hint"));
+  rt.style.textAlign = "right"; rt.appendChild(el("b", "₱" + b.fare));
+  var p = el("p"); p.appendChild(el("span", LABEL[b.status] || b.status, "st")); rt.appendChild(p);
+  r.appendChild(l); r.appendChild(rt); return r;
+}
+document.querySelectorAll("[data-sel]").forEach(function(b){ b.onclick = function(){ $(b.dataset.sel).selectedIndex = +b.dataset.i; render(); syncChips(); }; });
+document.querySelectorAll("[data-cat]").forEach(function(b){ b.onclick = function(){ openBook(b.dataset.cat); }; });
+document.querySelectorAll("#tabs button").forEach(function(b){ b.onclick = function(){ go(b.dataset.t); }; });
+$("gobook").onclick = function(){ openBook(); }; $("rtp").onclick = function(){ openBook(); }; $("rtd").onclick = function(){ openBook(); };
+$("back").onclick = closeBook; $("out2").onclick = function(){ auth.signOut(); };
+syncChips();
 </script>
 </body>
 </html>
