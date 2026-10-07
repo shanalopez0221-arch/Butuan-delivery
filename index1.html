@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Butuan Delivery</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<style>
+:root{--bg:#f2f6f5;--card:#fff;--ink:#12201f;--mute:#5b6e6c;--teal:#0e4f4a;--sun:#f2b01e;--line:#cfdcda;--onteal:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1a19;--card:#152826;--ink:#e8f1ef;--mute:#9bb2af;--teal:#2c8f86;--line:#2a4440}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45}
+header{background:var(--teal);color:var(--onteal);padding:22px 18px 50px}
+header h1{margin:0;font-size:1.9rem;font-weight:800;letter-spacing:-.02em}
+nav{display:flex;gap:8px;margin-top:14px}
+nav button{flex:1;padding:10px;border:1px solid rgba(255,255,255,.5);border-radius:10px;background:transparent;color:var(--onteal);font:inherit;font-weight:600;cursor:pointer}
+nav button.on{background:var(--sun);color:#12201f;border-color:var(--sun)}
+main{max-width:540px;margin:-30px auto 0;padding:0 14px 40px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:12px}
+label{display:block;font-weight:600;margin:12px 0 6px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid var(--sun);outline-offset:1px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fare{margin:16px 0 4px;padding:14px;border-radius:12px;background:var(--sun);color:#12201f;display:flex;justify-content:space-between;align-items:baseline}
+.fare b{font-size:1.9rem;font-weight:800}
+.hint{color:var(--mute);font-size:.85rem;margin:6px 0 0}
+.go{width:100%;margin-top:14px;padding:14px;border:0;border-radius:12px;background:var(--teal);color:var(--onteal);font:inherit;font-weight:800;font-size:1.05rem;cursor:pointer}
+.sm{padding:10px 14px;border:0;border-radius:10px;background:var(--teal);color:var(--onteal);font:inherit;font-weight:600;cursor:pointer;margin-top:8px}
+.st{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--sun);color:#12201f;font-weight:600;font-size:.85rem}
+.job b{font-size:1.05rem}
+.job p{margin:4px 0}
+.err{color:#b3261e;font-weight:600}
+a{color:inherit}
+.hide{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>Butuan Delivery</h1>
+  <nav>
+    <button data-v="book" class="on">Book</button>
+    <button data-v="rider">Rider</button>
+    <button data-v="admin">Admin</button>
+  </nav>
+</header>
+<main>
+<section id="book">
+  <form id="f" class="box" novalidate>
+    <label for="name">Your name</label><input id="name" autocomplete="name">
+    <label for="phone">Mobile number</label><input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="09XX XXX XXXX">
+    <label for="pu">Pickup address</label><input id="pu" placeholder="Barangay, street, or landmark">
+    <label for="do">Drop-off address</label><input id="do" placeholder="Barangay, street, or landmark">
+    <label for="km">Estimated distance (km)</label><input id="km" type="number" inputmode="decimal" min="1" step="0.5" value="3">
+    <div class="row">
+      <div><label for="size">Item size</label><select id="size"><option value="0">Small (bag)</option><option value="30">Medium (box)</option><option value="80">Large (sack)</option></select></div>
+      <div><label for="pay">Payment</label><select id="pay"><option>Cash</option><option>GCash</option></select></div>
+    </div>
+    <label for="note">Note for the rider</label><textarea id="note" rows="2" placeholder="Who to call, what to pick up"></textarea>
+    <div class="fare"><span>Estimated fare</span><b id="fare">₱0</b></div>
+    <p class="hint">The dispatcher confirms the final fare.</p>
+    <button class="go" type="submit">Book a rider</button>
+    <p id="msg" role="status"></p>
+  </form>
+  <div id="track" class="box hide"></div>
+</section>
+<section id="rider" class="hide">
+  <div class="box">
+    <label for="rn">Your rider name</label>
+    <input id="rn" placeholder="Same name the dispatcher uses">
+    <button class="sm" id="rgo" type="button">Show my jobs</button>
+  </div>
+  <div id="rjobs"></div>
+</section>
+<section id="admin" class="hide">
+  <div id="ajobs"></div>
+</section>
+</main>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// ===== Edit these =====
+var CONFIG = {
+  pin: "08162525",            // PIN for Rider and Admin tabs. Change it!
+  baseFare: 50, includedKm: 2, perKm: 12,
+  firebase: {
+    apiKey: "AIzaSyCWyH0IcE6uZgzsToisEeom2l8SkbQjYa0",
+    authDomain: "butuan-delivery.firebaseapp.com",
+    projectId: "butuan-delivery",
+    storageBucket: "butuan-delivery.firebasestorage.app",
+    messagingSenderId: "662503139863",
+    appId: "1:662503139863:web:f400a69cf41be256ff4a52"
+  }
+};
+// ======================
+firebase.initializeApp(CONFIG.firebase);
+var col = firebase.firestore().collection("bookings");
+var $ = function(i){ return document.getElementById(i); };
+var LABEL = { new: "Waiting for rider", assigned: "Rider assigned", picked_up: "Picked up", delivered: "Delivered" };
+var unlocked = false, unsubs = {};
+
+function el(tag, text, cls){ var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+function fare(){
+  var km = Math.max(1, parseFloat($("km").value) || 1);
+  return Math.round(CONFIG.baseFare + Math.max(0, km - CONFIG.includedKm) * CONFIG.perKm + parseInt($("size").value, 10));
+}
+function render(){ $("fare").textContent = "₱" + fare(); }
+["km","size"].forEach(function(i){ $(i).addEventListener("input", render); });
+render();
+
+// ---- tabs ----
+function show(v){
+  if ((v === "rider" || v === "admin") && !unlocked){
+    if (prompt("Enter PIN") !== CONFIG.pin){ alert("Wrong PIN."); v = "book"; } else unlocked = true;
+  }
+  ["book","rider","admin"].forEach(function(s){ $(s).classList.toggle("hide", s !== v); });
+  document.querySelectorAll("nav button").forEach(function(b){ b.classList.toggle("on", b.dataset.v === v); });
+  if (v === "admin") watchAdmin();
+}
+document.querySelectorAll("nav button").forEach(function(b){ b.onclick = function(){ show(b.dataset.v); }; });
+
+// ---- customer ----
+$("f").addEventListener("submit", function(e){
+  e.preventDefault();
+  var v = function(i){ return $(i).value.trim(); };
+  if (!v("name") || !v("phone") || !v("pu") || !v("do")){
+    $("msg").className = "err"; $("msg").textContent = "Fill in your name, number, pickup, and drop-off first."; return;
+  }
+  $("msg").className = ""; $("msg").textContent = "Sending…";
+  col.add({
+    name: v("name"), phone: v("phone"), pickup: v("pu"), dropoff: v("do"), km: parseFloat($("km").value) || 1,
+    size: $("size").selectedOptions[0].text, pay: $("pay").value, note: v("note"), fare: fare(),
+    status: "new", rider: "", createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(ref){
+    $("msg").textContent = ""; $("f").reset(); render(); watchTrack(ref.id);
+  }).catch(function(){ $("msg").className = "err"; $("msg").textContent = "Could not send. Check your internet and try again."; });
+});
+function watchTrack(id){
+  var t = $("track"); t.classList.remove("hide");
+  if (unsubs.track) unsubs.track();
+  unsubs.track = col.doc(id).onSnapshot(function(d){
+    var b = d.data(); if (!b) return;
+    t.textContent = "";
+    t.appendChild(el("b", "Booking sent. Fare: ₱" + b.fare));
+    var p = el("p"); p.appendChild(el("span", LABEL[b.status], "st")); t.appendChild(p);
+    if (b.rider) t.appendChild(el("p", "Rider: " + b.rider));
+    t.appendChild(el("p", b.pickup + " to " + b.dropoff, "hint"));
+  });
+}
+
+// ---- job cards (admin and rider) ----
+function card(d, mode){
+  var b = d.data(), c = el("div", null, "box job");
+  c.appendChild(el("b", b.pickup + " to " + b.dropoff));
+  var s = el("p"); s.appendChild(el("span", LABEL[b.status] || b.status, "st")); c.appendChild(s);
+  c.appendChild(el("p", "₱" + b.fare + " · " + b.pay + " · " + b.size + " · " + b.km + " km"));
+  var ph = el("p"); var a = el("a", b.name + " " + b.phone); a.href = "tel:" + b.phone; ph.appendChild(a); c.appendChild(ph);
+  if (b.note) c.appendChild(el("p", "Note: " + b.note, "hint"));
+  if (mode === "admin"){
+    if (b.status === "new" || b.status === "assigned"){
+      var i = el("input"); i.placeholder = "Rider name"; i.value = b.rider || ""; c.appendChild(i);
+      var g = el("button", b.rider ? "Change rider" : "Assign rider", "sm"); g.type = "button";
+      g.onclick = function(){ var r = i.value.trim(); if (r) d.ref.update({ rider: r, status: "assigned" }); };
+      c.appendChild(g);
+    } else if (b.rider) c.appendChild(el("p", "Rider: " + b.rider));
+  } else {
+    var next = b.status === "assigned" ? ["picked_up", "Mark picked up"] : b.status === "picked_up" ? ["delivered", "Mark delivered"] : null;
+    if (next){ var n = el("button", next[1], "sm"); n.type = "button"; n.onclick = function(){ d.ref.update({ status: next[0] }); }; c.appendChild(n); }
+  }
+  return c;
+}
+function draw(box, snap, mode, empty){
+  box.textContent = "";
+  var n = 0;
+  snap.forEach(function(d){ if (mode === "rider" && d.data().status === "delivered") return; box.appendChild(card(d, mode)); n++; });
+  if (!n) box.appendChild(el("p", empty, "box hint"));
+}
+function fail(box){ return function(){ box.textContent = "Could not load jobs. Check your internet and Firebase rules."; box.className = "box err"; }; }
+
+function watchAdmin(){
+  if (unsubs.admin) return;
+  var box = $("ajobs");
+  unsubs.admin = col.orderBy("createdAt", "desc").limit(50).onSnapshot(function(s){ draw(box, s, "admin", "No bookings yet."); }, fail(box));
+}
+$("rgo").onclick = function(){
+  var name = $("rn").value.trim(), box = $("rjobs");
+  if (!name) return;
+  if (unsubs.rider) unsubs.rider();
+  unsubs.rider = col.where("rider", "==", name).onSnapshot(function(s){ draw(box, s, "rider", "No jobs for " + name + " right now."); }, fail(box));
+};
+</script>
+</body>
+</html>
