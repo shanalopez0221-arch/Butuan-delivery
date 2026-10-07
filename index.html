@@ -116,6 +116,11 @@
     </div>
   </form>
 </div>
+<div id="vtrack" class="screen hide">
+  <div class="bar"><button type="button" id="tback" aria-label="Back">←</button><b>Track rider</b><span class="badge">DALIGO</span></div>
+  <div id="tmap"></div>
+  <div class="foot l" id="tsheet"></div>
+</div>
 <div id="mapbox" class="hide">
   <div id="map"></div>
   <div id="mapbar">
@@ -157,7 +162,7 @@ function refresh(){
   $("tabs").classList.toggle("hide", !ok);
   $("avatar").classList.toggle("hide", !ok);
   $("who").classList.toggle("hide", !user || ok);
-  if (!ok) closeBook();
+  if (!ok){ closeBook(); closeTrack(); }
   if (ok){
     prefill();
     var fn = cust.name.split(" ")[0];
@@ -195,7 +200,7 @@ function watchMine(){
     var docs = sn.docs.slice().sort(function(a, b){ return ts(b) - ts(a); });
     draw(box, { forEach: function(fn){ docs.forEach(fn); } }, "customer", "No bookings yet.");
     var rb = $("recent"); rb.textContent = "";
-    docs.slice(0, 3).forEach(function(d){ rb.appendChild(recentRow(d.data())); });
+    docs.slice(0, 3).forEach(function(d){ rb.appendChild(recentRow(d.data(), d.id)); });
     if (!docs.length) rb.appendChild(el("p", "No deliveries yet. Book your first rider!", "hint"));
   }, fail(box));
 }
@@ -300,8 +305,9 @@ function syncChips(){
   document.querySelectorAll("[data-sel]").forEach(function(b){ b.classList.toggle("on", $(b.dataset.sel).selectedIndex === +b.dataset.i); });
 }
 function toast(t){ var x = $("toast"); x.textContent = t; x.classList.remove("hide"); setTimeout(function(){ x.classList.add("hide"); }, 3500); }
-function recentRow(b){
+function recentRow(b, id){
   var r = el("div", null, "rc"), l = el("div"), rt = el("div");
+  if (id && (b.status === "assigned" || b.status === "picked_up")){ r.style.cursor = "pointer"; r.onclick = function(){ openTrack(id); }; }
   l.appendChild(el("b", (b.cat || "Parcel") + " delivery")); l.appendChild(el("p", b.pickup + " → " + b.dropoff, "hint"));
   rt.style.textAlign = "right"; rt.appendChild(el("b", "₱" + b.fare));
   var p = el("p"); p.appendChild(el("span", LABEL[b.status] || b.status, "st")); rt.appendChild(p);
@@ -313,6 +319,47 @@ document.querySelectorAll("#tabs button").forEach(function(b){ b.onclick = funct
 $("gobook").onclick = function(){ openBook(); }; $("rtp").onclick = function(){ openBook(); }; $("rtd").onclick = function(){ openBook(); };
 $("back").onclick = closeBook; $("out2").onclick = function(){ auth.signOut(); };
 syncChips();
+// ---- live rider tracking ----
+var tmap = null, tl = {};
+var STEP = { new: "Looking for a rider", assigned: "Rider is on the way", picked_up: "Your item is on its way", delivered: "Delivered" };
+function ic(cls, txt){ return L.divIcon({ html: '<div class="pk ' + cls + '">' + txt + '</div>', className: "", iconSize: [38, 38], iconAnchor: [19, 19] }); }
+function put(k, ll, icon){ if (!ll) return; if (tl[k]) tl[k].setLatLng(ll); else tl[k] = L.marker(ll, { icon: icon }).addTo(tmap); }
+function openTrack(id){
+  $("vtrack").classList.remove("hide"); document.body.style.overflow = "hidden";
+  if (!tmap){
+    tmap = L.map("tmap", { zoomControl: false }).setView(BUTUAN, 14);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(tmap);
+  }
+  ["pu", "do", "rd", "ln"].forEach(function(k){ if (tl[k]) tmap.removeLayer(tl[k]); });
+  tl = {}; $("tsheet").textContent = "Loading…";
+  setTimeout(function(){ tmap.invalidateSize(); }, 60);
+  stop("track");
+  unsubs.track = col.doc(id).onSnapshot(function(d){ if (d.exists) drawTrack(d.data()); });
+}
+function closeTrack(){ stop("track"); $("vtrack").classList.add("hide"); if ($("vbook").classList.contains("hide")) document.body.style.overflow = ""; }
+function drawTrack(b){
+  var pu = b.puLat != null ? [b.puLat, b.puLng] : null, dr = b.doLat != null ? [b.doLat, b.doLng] : null, rd = b.riderLat != null ? [b.riderLat, b.riderLng] : null;
+  var active = b.status === "assigned" || b.status === "picked_up";
+  put("pu", pu, ic("y", "P")); put("do", dr, ic("r", "D")); put("rd", active ? rd : null, ic("w", "🛵"));
+  if (pu && dr && !tl.ln) tl.ln = L.polyline([pu, dr], { color: "#2F6FED", weight: 5, opacity: 0.85 }).addTo(tmap);
+  var pts = [pu, dr, active ? rd : null].filter(Boolean);
+  if (pts.length && (!tl.fit || (rd && !tl.fitr))){ tmap.fitBounds(pts, { padding: [50, 50], maxZoom: 16 }); tl.fit = true; if (rd) tl.fitr = true; }
+  var target = b.status === "picked_up" ? dr : pu, eta = (active && rd && target) ? Math.max(1, Math.round(km2(rd, target) * 1.3 / 25 * 60)) : 0;
+  var s = $("tsheet"), top = el("div", null, "trow");
+  s.textContent = "";
+  top.appendChild(el("b", STEP[b.status] || b.status, "tt"));
+  if (eta) top.appendChild(el("span", eta + " min", "eta"));
+  s.appendChild(top);
+  if (active && !rd) s.appendChild(el("p", "Waiting for the rider's location…", "hint"));
+  if (b.status !== "new"){
+    var rr = el("div", null, "trow"), who = el("div");
+    who.appendChild(el("b", b.riderName || "Your rider")); who.appendChild(el("p", "DALIGO Rider", "hint")); rr.appendChild(who);
+    if (b.riderPhone){ var a = el("a", "Call rider", "sm"); a.href = "tel:" + b.riderPhone; rr.appendChild(a); }
+    s.appendChild(rr);
+  }
+  [["Pickup", b.pickup], ["Drop-off", b.dropoff], ["Item", b.size], ["Payment", b.pay]].forEach(function(p){ s.appendChild(el("p", p[0] + ": " + p[1], "tl")); });
+}
+$("tback").onclick = closeTrack;
 </script>
 </body>
 </html>

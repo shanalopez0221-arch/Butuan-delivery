@@ -41,6 +41,7 @@
   <p id="lmsg" class="err" role="status"></p>
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
+<p id="gps" class="hint"></p>
 <div id="rjobs" class="hide"></div>
 </main>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -75,7 +76,7 @@ function refresh(){
   $("rstate").classList.toggle("hide", !note);
   $("rredo").classList.toggle("hide", !(r === "rider" && rid.status === "rejected"));
   $("rjobs").classList.toggle("hide", !ok);
-  if (ok) watchRider(); else { stop("rider"); $("rjobs").textContent = ""; }
+  if (ok) watchRider(); else { stop("rider"); $("rjobs").textContent = ""; stopGeo(); }
 }
 startAuth(function(u){
   rid = null; loaded = false;
@@ -108,8 +109,28 @@ $("rredo").addEventListener("submit", function(e){
 function watchRider(){
   if (unsubs.rider) return;
   var box = $("rjobs");
-  unsubs.rider = col.where("riderEmail", "==", user.email.toLowerCase()).onSnapshot(function(sn){ draw(box, sn, "rider", "No jobs for you right now."); }, fail(box));
+  unsubs.rider = col.where("riderEmail", "==", user.email.toLowerCase()).onSnapshot(function(sn){ draw(box, sn, "rider", "No jobs for you right now."); trackJobs(sn); }, fail(box));
 }
+// ---- live location (shared only while a job is active) ----
+var geo = null, jobs = [], last = { t: 0, lat: 0, lng: 0 };
+function trackJobs(sn){
+  jobs = [];
+  sn.forEach(function(d){ var st = d.data().status; if (st === "assigned" || st === "picked_up") jobs.push(d.ref); });
+  if (jobs.length && geo === null && navigator.geolocation){
+    geo = navigator.geolocation.watchPosition(onPos, function(){ $("gps").textContent = "Turn on your phone location so customers can see you."; }, { enableHighAccuracy: true, maximumAge: 5000 });
+  }
+  if (!jobs.length) stopGeo();
+  else if (!$("gps").textContent) $("gps").textContent = "Sharing your live location with your customers.";
+}
+function onPos(p){
+  var now = Date.now(), lat = p.coords.latitude, lng = p.coords.longitude;
+  if (now - last.t < 10000) return;
+  if (Math.abs(lat - last.lat) < 0.00015 && Math.abs(lng - last.lng) < 0.00015 && now - last.t < 60000) return;
+  last = { t: now, lat: lat, lng: lng };
+  $("gps").textContent = "Sharing your live location with your customers.";
+  jobs.forEach(function(ref){ ref.update({ riderLat: lat, riderLng: lng, riderAt: now }); });
+}
+function stopGeo(){ if (geo !== null){ navigator.geolocation.clearWatch(geo); geo = null; } jobs = []; $("gps").textContent = ""; }
 </script>
 </body>
 </html>

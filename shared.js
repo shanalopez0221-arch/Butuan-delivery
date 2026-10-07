@@ -78,6 +78,7 @@ function card(d, mode){
   if (b.puLat != null && b.doLat != null) url = "https://www.google.com/maps/dir/?api=1&origin=" + b.puLat + "," + b.puLng + "&destination=" + b.doLat + "," + b.doLng;
   else if (b.puLat != null) url = "https://www.google.com/maps/search/?api=1&query=" + b.puLat + "," + b.puLng;
   if (url){ var mp = el("p"), ma = el("a", b.doLat != null ? "Open route in Maps" : "Open pickup in Maps"); ma.href = url; ma.target = "_blank"; ma.rel = "noopener"; mp.appendChild(ma); c.appendChild(mp); }
+  if (mode === "admin" && b.riderLat != null){ var lp = el("p"), la = el("a", "Rider live location"); la.href = "https://www.google.com/maps/search/?api=1&query=" + b.riderLat + "," + b.riderLng; la.target = "_blank"; la.rel = "noopener"; lp.appendChild(la); c.appendChild(lp); }
   [["pickupPhoto", "Pickup proof"], ["deliveryPhoto", "Delivery proof"]].forEach(function(p){
     if (b[p[0]]){ c.appendChild(el("p", p[1], "hint")); var im = el("img", null, "proof"); im.src = b[p[0]]; im.alt = p[1]; c.appendChild(im); }
   });
@@ -86,12 +87,15 @@ function card(d, mode){
     if (b.status === "new" || b.status === "assigned"){
       var i = el("input"); i.type = "email"; i.placeholder = "Rider email"; i.setAttribute("list", "riderlist"); i.value = b.riderEmail || ""; c.appendChild(i);
       var g = el("button", b.riderEmail ? "Change rider" : "Assign rider", "sm"); g.type = "button";
-      g.onclick = function(){ var r = i.value.trim().toLowerCase(); if (r) d.ref.update({ riderEmail: r, status: "assigned" }); };
+      g.onclick = function(){ var r = i.value.trim().toLowerCase(), f = (window.RIDERS || {})[r] || {}; if (r) d.ref.update({ riderEmail: r, riderName: f.name || "", riderPhone: f.phone || "", status: "assigned" }); };
       c.appendChild(g);
     } else if (b.riderEmail) c.appendChild(el("p", "Rider: " + b.riderEmail));
   } else if (mode === "rider") {
     if (b.status === "assigned") c.appendChild(proofBtn("Take pickup photo", "pickupPhoto", "picked_up", d));
     else if (b.status === "picked_up") c.appendChild(proofBtn("Take delivery photo", "deliveryPhoto", "delivered", d));
+  }
+  if (mode === "customer" && (b.status === "assigned" || b.status === "picked_up") && window.openTrack){
+    var tb = el("button", "Track rider", "sm"); tb.type = "button"; tb.onclick = function(){ openTrack(d.id); }; c.appendChild(tb);
   }
   return c;
 }

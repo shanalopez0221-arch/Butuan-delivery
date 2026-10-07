@@ -51,8 +51,8 @@
 function watchApprovedRiders(){
   if (unsubs.arl) return;
   unsubs.arl = db.collection("riders").where("status", "==", "approved").onSnapshot(function(sn){
-    var dl = $("riderlist"); dl.textContent = "";
-    sn.forEach(function(d){ var u = d.data(), o = el("option", u.name + " " + u.plate); o.value = u.email; dl.appendChild(o); });
+    var dl = $("riderlist"); dl.textContent = ""; window.RIDERS = {};
+    sn.forEach(function(d){ var u = d.data(), o = el("option", u.name + " " + u.plate); o.value = u.email; dl.appendChild(o); window.RIDERS[u.email] = { name: u.name, phone: u.phone }; });
   });
 }
 </script>
