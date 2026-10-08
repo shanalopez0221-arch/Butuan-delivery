@@ -2,9 +2,10 @@
 var CONFIG = {
   adminEmail: "shanalopez0221@gmail.com",   // the only account that can see all bookings
   baseFare: 0, includedKm: 0, perKm: 50,   // fare = km x perKm (+ item size fee)
-  platformFeeRate: 0.20,                  // DALIGO keeps 20% of each completed delivery
-  riderMinWallet: 300,                    // cash bookings require at least ₱300 rider wallet balance
-  functionsBaseUrl: "https://us-central1-butuan-delivery.cloudfunctions.net",
+  commissionPct: 20,                        // your cut of each fare. Must match the commission() in firestore.rules
+  minBalance: 100,                          // rider wallet must be at least this to get jobs
+  // PayMongo payment links, one per top-up amount. Make them in PayMongo > Payment Links, paste the URLs here.
+  topupLinks: { 100: "https://pm.link/org-JWCoRq26nh2wok72771Zt1vt/FeADbx1", 200: "https://pm.link/org-JWCoRq26nh2wok72771Zt1vt/QjZTBIH", 300: "https://pm.link/org-JWCoRq26nh2wok72771Zt1vt/6jpOo3K", 500: "https://pm.link/org-JWCoRq26nh2wok72771Zt1vt/ig1Nt2O", 1000: "https://pm.link/org-JWCoRq26nh2wok72771Zt1vt/icutnFj" },
   firebase: {
     apiKey: "AIzaSyCWyH0IcE6uZgzsToisEeom2l8SkbQjYa0",
     authDomain: "butuan-delivery.firebaseapp.com",
@@ -21,11 +22,6 @@ var col = db.collection("bookings");
 var auth = firebase.auth();
 var $ = function(i){ return document.getElementById(i); };
 var LABEL = { new: "Waiting for rider", assigned: "Rider assigned", picked_up: "Picked up", delivered: "Delivered" };
-function peso(n){ return "₱" + Math.max(0, Math.round(Number(n) || 0)).toLocaleString("en-PH"); }
-function platformFee(b){ return Math.max(0, Math.round((Number(b.fare) || 0) * CONFIG.platformFeeRate)); }
-function riderEarnings(b){ return Math.max(0, (Number(b.fare) || 0) - platformFee(b)); }
-function walletAmount(r){ return Math.max(0, Number(r && r.walletBalance) || 0); }
-function canTakeCashJob(r){ return walletAmount(r) >= CONFIG.riderMinWallet; }
 var user = null, unsubs = {};
 function el(tag, text, cls){ var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
 function stop(k){ if (unsubs[k]){ unsubs[k](); unsubs[k] = null; } }
@@ -61,21 +57,21 @@ function squeeze(file, max, q){
     img.onerror = no; img.src = u;
   });
 }
-var modeForProof = "generic";
 function proofBtn(text, field, status, d){
   var l = el("label", null, "sm"), t = el("span", text), f = el("input");
   l.style.display = "inline-block"; f.type = "file"; f.accept = "image/*"; f.setAttribute("capture", "environment"); f.hidden = true;
   f.onchange = function(){
     if (!f.files[0]) return; t.textContent = "Uploading…";
     squeeze(f.files[0], 720, 0.6).then(function(url){
-        if (modeForProof === "rider" && status === "delivered") return settleDelivery(d, url, field);
-        if (modeForProof === "rider" && status === "picked_up") return securePost("markPickedUp", { bookingId: d.id, photoUrl: url });
-        var u = { status: status }; u[field] = url; return d.ref.update(u);
-      })
+      if (status === "delivered" && window.deliverJob) return window.deliverJob(d, url);   // rider: delivery + fee in one batch
+      var u = { status: status }; u[field] = url; return d.ref.update(u);
+    })
       .catch(function(){ t.textContent = "Upload failed. Tap to try again."; });
   };
   l.appendChild(t); l.appendChild(f); return l;
 }
+function fee(fare){ return Math.ceil(fare * CONFIG.commissionPct / 100); }   // same formula as the rules
+function peso(n){ return (n < 0 ? "-" : "") + "₱" + Math.abs(n).toLocaleString("en-PH"); }
 function ts(d){ var t = d.data().createdAt; return t ? t.toMillis() : Infinity; }
 // ---- job cards (admin and rider) ----
 function card(d, mode){
@@ -85,13 +81,7 @@ function card(d, mode){
   var pr = el("div", null, "prog"), n = ["new", "assigned", "picked_up", "delivered"].indexOf(b.status) + 1;
   for (var k = 0; k < 4; k++) pr.appendChild(el("i", null, k < n ? "on" : ""));
   c.appendChild(pr);
-  c.appendChild(el("p", (b.cat ? b.cat + " · " : "") + peso(b.fare) + " · " + b.pay + " · " + b.size + " · " + b.km + " km"));
-  var fin = el("div", null, "job-fin");
-  fin.appendChild(el("span", "Rider: " + peso(riderEarnings(b))));
-  fin.appendChild(el("span", "DALIGO fee: " + peso(platformFee(b))));
-  if (b.pay === "Cash") fin.appendChild(el("span", "Cash collected by rider"));
-  else fin.appendChild(el("span", "GCash paid to rider"));
-  c.appendChild(fin);
+  c.appendChild(el("p", (b.cat ? b.cat + " · " : "") + "₱" + b.fare + " · " + b.pay + " · " + b.size + " · " + b.km + " km"));
   var ph = el("p"); var a = el("a", b.name + " " + b.phone); a.href = "tel:" + b.phone; ph.appendChild(a); c.appendChild(ph);
   var url = null;
   if (b.puLat != null && b.doLat != null) url = "https://www.google.com/maps/dir/?api=1&origin=" + b.puLat + "," + b.puLng + "&destination=" + b.doLat + "," + b.doLng;
@@ -102,31 +92,21 @@ function card(d, mode){
     if (b[p[0]]){ c.appendChild(el("p", p[1], "hint")); var im = el("img", null, "proof"); im.src = b[p[0]]; im.alt = p[1]; c.appendChild(im); }
   });
   if (b.note) c.appendChild(el("p", "Note: " + b.note, "hint"));
+  if (mode === "rider") c.appendChild(el("p", "You collect " + peso(b.fare) + " (" + b.pay + "). Platform fee " + peso(fee(b.fare)) + " comes off your wallet when delivered.", "hint"));
   if (mode === "admin"){
     if (b.status === "new" || b.status === "assigned"){
       var i = el("input"); i.type = "email"; i.placeholder = "Rider email"; i.setAttribute("list", "riderlist"); i.value = b.riderEmail || ""; c.appendChild(i);
       var g = el("button", b.riderEmail ? "Change rider" : "Assign rider", "sm"); g.type = "button";
       g.onclick = function(){
-        var r = i.value.trim().toLowerCase(), f = (window.RIDERS || {})[r] || {};
+        var r = i.value.trim().toLowerCase(), f = (window.RIDERS || {})[r];
         if (!r) return;
-        if (!f.name){ toast("Select an approved rider from the list."); return; }
-        var riderWallet = walletAmount(f);
-        if (b.pay === "Cash" && riderWallet < CONFIG.riderMinWallet){
-          toast("This rider needs at least " + peso(CONFIG.riderMinWallet) + " in DALIGO wallet before taking a cash booking.");
-          return;
-        }
-        if (b.pay === "GCash" && riderWallet < platformFee(b)){
-          toast("This rider needs at least " + peso(platformFee(b)) + " in DALIGO wallet to reserve the DALIGO platform fee for this GCash booking.");
-          return;
-        }
-        securePost("assignRider", { bookingId: d.id, riderUid: f.uid || "", riderEmail: r })
-          .then(function(){ toast("Rider assigned."); })
-          .catch(function(err){ toast(err.message || "Could not assign rider."); });
+        if (!f){ alert("That email is not an approved rider."); return; }
+        if ((f.wallet || 0) < CONFIG.minBalance){ alert(f.name + " has " + peso(f.wallet || 0) + " in the wallet. The rider needs at least " + peso(CONFIG.minBalance) + " to get jobs."); return; }
+        d.ref.update({ riderEmail: r, riderName: f.name || "", riderPhone: f.phone || "", riderGcash: f.gcash || "", status: "assigned" });
       };
       c.appendChild(g);
     } else if (b.riderEmail) c.appendChild(el("p", "Rider: " + b.riderEmail));
   } else if (mode === "rider") {
-    modeForProof = "rider";
     if (b.status === "assigned") c.appendChild(proofBtn("Take pickup photo", "pickupPhoto", "picked_up", d));
     else if (b.status === "picked_up") c.appendChild(proofBtn("Take delivery photo", "deliveryPhoto", "delivered", d));
   }
@@ -135,27 +115,6 @@ function card(d, mode){
   }
   return c;
 }
-function securePost(action, payload){
-  if (!user) return Promise.reject(new Error("Please sign in first."));
-  return user.getIdToken().then(function(token){
-    return fetch((CONFIG.functionsBaseUrl || "") + "/" + action, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
-      body: JSON.stringify(payload || {})
-    });
-  }).then(function(r){
-    return r.json().catch(function(){ return {}; }).then(function(j){
-      if (!r.ok) throw new Error(j.error || "Request failed.");
-      return j;
-    });
-  });
-}
-function settleDelivery(d, photoUrl, field){
-  if (!user || !d || !d.id) return Promise.reject(new Error("No rider or booking."));
-  return securePost("completeDelivery", { bookingId: d.id, photoUrl: photoUrl || "", photoField: field || "deliveryPhoto" })
-    .catch(function(err){ if (window.toast) toast(err.message || "Could not complete delivery."); else alert(err.message || "Could not complete delivery."); throw err; });
-}
-
 function draw(box, snap, mode, empty){
   box.textContent = ""; box.classList.remove("box", "err");
   var n = 0;
