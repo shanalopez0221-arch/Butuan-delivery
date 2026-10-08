@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="daligo.css">
 <style>
 .wal{text-align:center}.bal{font-size:2.6rem;font-weight:900;color:var(--navy);letter-spacing:-.02em}.bal.low{color:#B3261E}
-.chipa{display:block;padding:12px 4px;text-align:center;border-radius:999px;border:2px solid var(--line);background:#fff;color:var(--navy);font-weight:800;text-decoration:none}
+.chipa{display:block;padding:12px 4px;text-align:center;border-radius:999px;border:2px solid var(--line);background:#fff;color:var(--navy);font:inherit;font-weight:800;cursor:pointer}.chipa.on{border-color:var(--teal);background:#EAF0FF;box-shadow:0 0 0 2px var(--teal) inset}.payb{display:block;text-align:center;text-decoration:none;margin-top:12px}
 #tuamts{margin:12px 0 4px}.tx{display:flex;justify-content:space-between;align-items:center;gap:10px}.tx p{margin:2px 0 0}.pos{color:#0B6B63}.neg{color:#B3261E}
 </style>
 </head>
@@ -62,8 +62,9 @@
       <b>Top up</b>
       <p class="hint">Pick an amount, pay with GCash, Maya or card on the secure DALIGO payment page. Then send your reference number below so the admin can add it to your wallet.</p>
       <div class="chips" id="tuamts"></div>
+      <a id="tupay" class="go payb hide" target="_blank" rel="noopener">Pay with PayMongo</a><p id="tulink" class="err" role="status"></p>
       <form id="tuform" novalidate>
-        <label for="tua">Amount you paid (₱)</label><input id="tua" type="number" inputmode="numeric" min="100" step="1">
+        <p class="hint" id="tuamt" style="margin-top:14px">Choose an amount above first.</p><input id="tua" type="hidden">
         <label for="tur">Reference number from your receipt</label><input id="tur" autocapitalize="characters" autocomplete="off">
         <label for="tup">Screenshot of your receipt</label><input id="tup" type="file" accept="image/*">
         <button class="go" type="submit">Send top-up for approval</button>
@@ -194,12 +195,19 @@ function drawWallet(){
   var lb = $("lowbal"); lb.classList.toggle("hide", !low); lb.textContent = "";
   if (low){ lb.appendChild(el("b", "Top up to get jobs")); lb.appendChild(el("p", "Your wallet is " + peso(b) + ". The minimum is " + peso(CONFIG.minBalance) + ". The admin can only give you jobs once you reach it.", "hint")); var tb = el("button", "Open wallet", "sm"); tb.type = "button"; tb.onclick = function(){ go("vwallet"); }; lb.appendChild(tb); }
   var box = $("tuamts"); if (!box.firstChild) Object.keys(CONFIG.topupLinks).forEach(function(a){
-    var l = el("a", "₱" + a), u = CONFIG.topupLinks[a];
-    l.className = "chipa"; l.target = "_blank"; l.rel = "noopener";
-    if (u) l.href = u; else { l.href = "#"; l.onclick = function(e){ e.preventDefault(); $("tumsg").textContent = "Top-up links are not set up yet. Ask the admin."; }; }
-    l.addEventListener("click", function(){ $("tua").value = a; });
-    box.appendChild(l);
+    var bt = el("button", "₱" + a, "chipa"); bt.type = "button"; bt.dataset.a = a;
+    bt.onclick = function(){ pickAmt(a); };
+    box.appendChild(bt);
   });
+}
+function pickAmt(a){
+  var on = $("tua").value === String(a);          // tap again to unselect
+  $("tua").value = on ? "" : a;
+  document.querySelectorAll("#tuamts button").forEach(function(x){ x.classList.toggle("on", !on && x.dataset.a === String(a)); });
+  var pay = $("tupay"), u = CONFIG.topupLinks[a]; $("tulink").textContent = "";
+  $("tuamt").textContent = on ? "Choose an amount above first." : "Top-up amount: ₱" + a + ". Pay it, then send your reference number below.";
+  pay.classList.toggle("hide", on); pay.textContent = "Pay ₱" + a + " with PayMongo";
+  if (u){ pay.href = u; pay.onclick = null; } else { pay.removeAttribute("href"); pay.onclick = function(){ $("tulink").textContent = "Top-up links are not set up yet. Please contact the admin."; }; }
 }
 function watchWallet(){
   if (unsubs.tu) return;
@@ -229,13 +237,13 @@ $("tuform").addEventListener("submit", function(e){
   e.preventDefault();
   var m = $("tumsg"), amt = parseInt($("tua").value, 10), ref = $("tur").value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""), f = $("tup").files[0];
   m.className = "err";
-  if (!(amt >= CONFIG.minBalance)){ m.textContent = "Minimum top-up is " + peso(CONFIG.minBalance) + "."; return; }
+  if (!CONFIG.topupLinks.hasOwnProperty(amt)){ m.textContent = "Choose one of the top-up amounts first."; return; }
   if (!/^[A-Z0-9]{6,30}$/.test(ref)){ m.textContent = "Enter the reference number exactly as on your receipt (letters and numbers, 6 or more)."; return; }
   if (!f){ m.textContent = "Add a screenshot of your receipt."; return; }
   m.className = "hint"; m.textContent = "Sending…";
   squeezeTo(f, 200000).then(function(url){
     return db.collection("topups").doc(ref).set({ riderUid: user.uid, riderEmail: user.email.toLowerCase(), riderName: rid.name, amount: amt, ref: ref, proof: url, status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-  }).then(function(){ m.textContent = "Sent. The admin will check it and add it to your wallet."; $("tuform").reset(); })
+  }).then(function(){ m.textContent = "Sent. The admin will check it and add it to your wallet."; $("tuform").reset(); $("tua").value = ""; pickAmt(amt); pickAmt(amt); $("tupay").classList.add("hide"); document.querySelectorAll("#tuamts button").forEach(function(x){ x.classList.remove("on"); }); $("tuamt").textContent = "Choose an amount above first."; })
     .catch(function(){ m.className = "err"; m.textContent = "Could not send. This reference number may already be used. Check it and try again."; });
 });
 // Called when a rider finishes a job: marks it delivered and takes the platform fee in one atomic write
