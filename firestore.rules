@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn() && request.auth.token.email == 'shanalopez0221@gmail.com';
+    }
+    function own(uid) { return signedIn() && request.auth.uid == uid; }
+
+    match /users/{uid} {
+      allow read: if own(uid) || isAdmin();
+      allow create: if own(uid) && request.resource.data.email == request.auth.token.email;
+      allow update: if own(uid) || isAdmin();
+      allow delete: if own(uid) || isAdmin();
+    }
+
+    match /riders/{uid} {
+      allow read: if own(uid) || isAdmin();
+      allow create: if own(uid);
+      // Wallet balance, approval status and other financial fields are server-controlled.
+      allow update: if isAdmin() || (own(uid) &&
+        request.resource.data.walletBalance == resource.data.walletBalance &&
+        request.resource.data.status == resource.data.status);
+      allow delete: if isAdmin() || own(uid);
+    }
+
+    match /bookings/{id} {
+      allow read: if signedIn() && (resource.data.customerUid == request.auth.uid ||
+        resource.data.riderUid == request.auth.uid || isAdmin());
+      allow create: if signedIn() && request.resource.data.customerUid == request.auth.uid &&
+        request.resource.data.status == 'new';
+      // Assignment, pickup, delivery, commission and payment state are server-controlled.
+      allow update, delete: if isAdmin();
+    }
+
+    match /walletLedger/{id} {
+      allow read: if signedIn() && (resource.data.riderUid == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /walletTopups/{id} {
+      allow read: if signedIn() && (resource.data.riderUid == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /platformRevenue/{id} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "functions": { "source": "functions" },
+  "hosting": {
+    "public": ".",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "functions/**", "README.md", "firestore.rules", "firestore.indexes.json"],
+    "cleanUrls": true,
+    "headers": [
+      {"source": "/*.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
+      {"source": "/sw.js", "headers": [{"key": "Cache-Control", "value": "no-cache"}]}
+    ]
+  },
+  "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" }
+}

@@ -1,7 +1,17 @@
-DALIGO payment/revenue update
-- shared.js: platform fee, rider wallet, assignment checks, delivery settlement ledger
-- rider.html: GCash number, wallet display, top-up request workflow
-- admin.html: Finance tab, top-up approval, revenue ledger
-- index.html: payment method messaging, platform fee/rider earning fields
-- daligo.css: wallet/revenue UI
-- PAYMENT_SETUP.md: payment flow and production notes
+DALIGO payment/revenue update — secure wallet model
+
+- Removed the owner's personal GCash number from the client application.
+- Rider top-ups now start a secure GCash checkout; verified payment webhooks credit the rider's DALIGO wallet.
+- Added walletLedger history so top-ups and cash-job commission debits remain visible in the rider account.
+- Cash bookings require at least ₱300 wallet balance before assignment.
+- Cash delivery completion securely debits only the DALIGO platform fee from the rider wallet.
+- GCash bookings are blocked from assignment until gateway payment is verified.
+- GCash delivery completion records DALIGO platform revenue separately and records rider earnings as payable; it does not debit the rider wallet.
+- Added server-side Firebase Functions for checkout creation, rider assignment, pickup confirmation, delivery settlement, and PayMongo webhook verification.
+- Admin finance no longer treats rider top-ups as revenue and no longer displays the owner's GCash number.
+- The existing Android AAB is not rebuilt by this web/backend update. Rebuild the Android package after deploying the updated web app/functions.
+
+Production warning:
+- Configure real PayMongo credentials only in functions/.env or another secure server-side secret mechanism.
+- Never place PayMongo secret keys in browser code or the Android binary.
+- Test the complete payment/webhook flow in PayMongo test mode before enabling live payments.

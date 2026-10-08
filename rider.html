@@ -54,13 +54,15 @@
   <div class="box wallet-card">
     <div class="wallet-head"><div><span class="hint">DALIGO wallet</span><b id="wallet">₱0</b></div><span id="walletst" class="st">Top-up required for cash jobs</span></div>
     <p class="hint">Minimum wallet for cash bookings: <b id="walletmin">₱300</b></p>
-    <p class="hint">Top up by sending GCash to <b id="ownerGcash"></b>, then submit your reference.</p>
+    <p class="hint">Your top-up becomes credit in your DALIGO wallet after secure payment confirmation. DALIGO does not display a personal GCash number for top-ups.</p>
     <div class="row">
       <input id="topupamt" type="number" min="300" step="50" placeholder="Amount">
-      <input id="topupref" placeholder="GCash reference">
     </div>
-    <button class="sm" id="topup" type="button">Request wallet top-up</button>
+    <button class="sm" id="topup" type="button">Top up wallet securely</button>
     <p id="topupmsg" class="hint"></p>
+    <div class="box" style="margin-top:10px;padding:12px">
+      <b>Wallet history</b><div id="walletHistory"><p class="hint">No wallet transactions yet.</p></div>
+    </div>
   </div>
   <p id="gps" class="hint"></p><div id="rjobs"></div>
 </section>
@@ -111,11 +113,11 @@ function refresh(){
     $("av").textContent = fn.charAt(0).toUpperCase(); $("avn").textContent = fn; $("greet").textContent = "Hi, " + fn + "! Your jobs";
     $("pname").textContent = rid.name; $("pinfo").textContent = rid.phone + " · " + rid.email; $("pplate").textContent = "Plate: " + rid.plate;
     $("pgcash").textContent = "GCash: " + (rid.gcash || "Not added");
-    $("wallet").textContent = peso(walletAmount(rid)); $("walletmin").textContent = peso(CONFIG.riderMinWallet); $("ownerGcash").textContent = CONFIG.ownerGcash;
+    $("wallet").textContent = peso(walletAmount(rid)); $("walletmin").textContent = peso(CONFIG.riderMinWallet);
     $("walletst").textContent = walletAmount(rid) >= CONFIG.riderMinWallet ? "Ready for cash jobs" : "Top-up required for cash jobs";
     $("walletst").className = walletAmount(rid) >= CONFIG.riderMinWallet ? "st ok" : "st warn";
   }
-  if (ok) watchRider(); else { stop("rider"); $("rjobs").textContent = ""; stopGeo(); }
+  if (ok) { watchRider(); watchWalletHistory(); } else { stop("rider"); stop("walletLedger"); $("rjobs").textContent = ""; $("walletHistory").textContent = ""; stopGeo(); }
 }
 startAuth(function(u){
   rid = null; loaded = false;
@@ -146,19 +148,27 @@ $("rredo").addEventListener("submit", function(e){
     .catch(function(){ $("rst").textContent = "Could not send. Try again."; });
 });
 $("topup").onclick = function(){
-  var amount = Math.round(Number($("topupamt").value) || 0), ref = $("topupref").value.trim();
+  var amount = Math.round(Number($("topupamt").value) || 0);
   if (amount < CONFIG.riderMinWallet){ $("topupmsg").textContent = "Minimum top-up is " + peso(CONFIG.riderMinWallet) + "."; return; }
-  if (!ref){ $("topupmsg").textContent = "Enter your GCash reference number after sending the money."; return; }
-  $("topupmsg").textContent = "Submitting top-up request…";
-  db.collection("walletTopups").add({
-    riderUid: user.uid, riderEmail: user.email.toLowerCase(), riderName: rid.name, riderGcash: rid.gcash || "",
-    amount: amount, reference: ref, ownerGcash: CONFIG.ownerGcash,
-    status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){
-    $("topupamt").value = ""; $("topupref").value = "";
-    $("topupmsg").textContent = "Request sent. Admin will verify the GCash transfer before crediting your wallet.";
-  }).catch(function(){ $("topupmsg").textContent = "Could not submit the top-up request."; });
+  $("topupmsg").textContent = "Opening secure GCash checkout…";
+  securePost("createCheckout", { kind: "rider_topup", amount: amount, successUrl: location.href, cancelUrl: location.href })
+    .then(function(r){ window.location.href = r.checkoutUrl; })
+    .catch(function(err){ $("topupmsg").textContent = err.message || "Could not start the secure checkout."; });
 };
+function watchWalletHistory(){
+  if (unsubs.walletLedger) return;
+  unsubs.walletLedger = db.collection("walletLedger").where("riderUid", "==", user.uid).limit(30).onSnapshot(function(sn){
+    var box = $("walletHistory"); box.textContent = "";
+    var rows = sn.docs.slice().sort(function(a,b){ return ts(b) - ts(a); });
+    if (!rows.length){ box.appendChild(el("p", "No wallet transactions yet.", "hint")); return; }
+    rows.forEach(function(d){ var x=d.data(), row=el("div",null,"trow");
+      var left=el("div"), right=el("div"); left.appendChild(el("b", x.description || x.type || "Wallet transaction"));
+      left.appendChild(el("p", x.bookingId ? "Booking: " + x.bookingId : "", "hint"));
+      right.style.textAlign="right"; right.appendChild(el("b", (x.direction === "debit" ? "−" : "+") + peso(x.amount)));
+      right.appendChild(el("p", "Balance " + peso(x.balanceAfter), "hint")); row.appendChild(left); row.appendChild(right); box.appendChild(row);
+    });
+  });
+}
 function watchRider(){
   if (unsubs.rider) return;
   var box = $("rjobs");

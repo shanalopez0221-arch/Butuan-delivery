@@ -112,7 +112,7 @@ function watchApprovedRiders(){
   if (unsubs.arl) return;
   unsubs.arl = db.collection("riders").where("status", "==", "approved").onSnapshot(function(sn){
     var dl = $("riderlist"); dl.textContent = ""; window.RIDERS = {};
-    sn.forEach(function(d){ var u = d.data(), o = el("option", u.name + " " + u.plate); o.value = u.email; dl.appendChild(o); window.RIDERS[u.email] = { name: u.name, phone: u.phone }; });
+    sn.forEach(function(d){ var u = d.data(), o = el("option", u.name + " " + u.plate); o.value = u.email; dl.appendChild(o); window.RIDERS[u.email] = { uid: d.id, name: u.name, phone: u.phone, gcash: u.gcash || "", walletBalance: walletAmount(u) }; });
   });
 }
 
@@ -120,46 +120,45 @@ function watchApprovedRiders(){
 function watchFinance(){
   if (unsubs.finance) return;
   var box = $("finance");
-  var total = 0, topups = 0;
-  var html = '<div class="box"><b>DALIGO settlement account</b><p class="hint">GCash: <b>' + CONFIG.ownerGcash + '</b></p><p class="hint">Platform fee rate: <b>' + Math.round(CONFIG.platformFeeRate*100) + '%</b></p></div>';
-  box.innerHTML = html;
-  unsubs.finance = db.collection("platformRevenue").orderBy("createdAt","desc").limit(50).onSnapshot(function(sn){
-    var total = 0; sn.forEach(function(d){ total += Number(d.data().amount)||0; });
-    box.innerHTML = '<div class="box"><b>DALIGO revenue</b><p style="font-size:1.7rem;font-weight:800">' + peso(total) + '</p><p class="hint">Revenue is credited from rider wallet deductions. Your settlement GCash: <b>' + CONFIG.ownerGcash + '</b></p></div>';
+  box.innerHTML = '<div class="box"><b>DALIGO Finance</b><p class="hint">Customer GCash payments and rider wallet top-ups are processed through the payment gateway. The owner\'s personal GCash number is not stored in this app.</p><p class="hint">Platform revenue is counted only when a delivery is completed.</p></div>';
+  unsubs.finance = db.collection("platformRevenue").orderBy("createdAt","desc").limit(100).onSnapshot(function(sn){
+    var total = 0, cash = 0, gcash = 0;
+    sn.forEach(function(d){ var x=d.data(), a=Number(x.amount)||0; total += a; if (x.paymentMethod === "Cash") cash += a; if (x.paymentMethod === "GCash") gcash += a; });
+    box.innerHTML = '<div class="box"><b>DALIGO platform revenue</b><p style="font-size:1.7rem;font-weight:800">' + peso(total) + '</p><p class="hint">Cash-job fees: ' + peso(cash) + ' · GCash-job fees: ' + peso(gcash) + '</p><p class="hint">Revenue entries are created only after successful delivery settlement.</p></div>';
     sn.forEach(function(d){
       var x=d.data(), c=el("div",null,"box job");
       c.appendChild(el("b", "Platform fee " + peso(x.amount)));
-      c.appendChild(el("p", (x.paymentMethod||"") + " · " + (x.riderName||x.riderEmail||"Rider")));
-      c.appendChild(el("p", "Booking: " + (x.bookingId||"—") + " · Settled to DALIGO ledger", "hint"));
+      c.appendChild(el("p", (x.paymentMethod||"") + " · " + (x.riderEmail||"Rider")));
+      c.appendChild(el("p", "Booking: " + (x.bookingId||"—") + " · Source: " + (x.source||"ledger"), "hint"));
       box.appendChild(c);
     });
-    watchTopups(box);
+    watchTopups(box); watchWallets(box);
   }, fail(box));
 }
 function watchTopups(box){
   if (unsubs.topups) return;
   unsubs.topups = db.collection("walletTopups").where("status","==","pending").onSnapshot(function(sn){
+    var old = $("pendingTopups"); if (old) old.remove();
     if (!sn.size) return;
-    var h=el("div",null,"box"); h.appendChild(el("b","Pending rider wallet top-ups"));
+    var h=el("div",null,"box"); h.id="pendingTopups"; h.appendChild(el("b","Pending wallet payments"));
     sn.forEach(function(d){
       var x=d.data(), c=el("div",null,"job");
       c.appendChild(el("b",x.riderName+" · "+peso(x.amount)));
-      c.appendChild(el("p","GCash ref: "+x.reference));
-      c.appendChild(el("p","Rider GCash: "+(x.riderGcash||"Not provided")+" · Sent to DALIGO: "+CONFIG.ownerGcash,"hint"));
-      var ok=el("button","Approve top-up","sm"), no=el("button","Reject","sm");
-      ok.onclick=function(){
-        var rr=db.collection("riders").doc(x.riderUid);
-        db.runTransaction(function(tx){ return tx.get(rr).then(function(rd){
-          if(!rd.exists) throw new Error("Rider not found");
-          var old=walletAmount(rd.data());
-          tx.update(rr,{walletBalance:old+Number(x.amount),walletUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()});
-          tx.update(d.ref,{status:"approved",approvedAt:firebase.firestore.FieldValue.serverTimestamp(),approvedBy:user.email});
-        });}).catch(function(){ toast("Could not approve top-up."); });
-      };
-      no.onclick=function(){ d.ref.update({status:"rejected",approvedAt:firebase.firestore.FieldValue.serverTimestamp(),approvedBy:user.email}); };
-      c.appendChild(ok); c.appendChild(no); h.appendChild(c);
+      c.appendChild(el("p", "Status: awaiting secure GCash checkout confirmation."));
+      c.appendChild(el("p", "Reference: "+(x.referenceNumber||d.id),"hint"));
+      h.appendChild(c);
     });
     box.prepend(h);
+  });
+}
+function watchWallets(box){
+  if (unsubs.wallets) return;
+  unsubs.wallets = db.collection("riders").where("status","==","approved").onSnapshot(function(sn){
+    var old = $("walletsBox"); if (old) old.remove();
+    var h=el("div",null,"box"); h.id="walletsBox"; h.appendChild(el("b","Approved rider wallets"));
+    sn.forEach(function(d){ var x=d.data(), c=el("div",null,"trow");
+      c.appendChild(el("b",x.name||x.email)); c.appendChild(el("span",peso(walletAmount(x)),"st")); h.appendChild(c); });
+    box.appendChild(h);
   });
 }
 

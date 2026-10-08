@@ -1,0 +1,9 @@
+{
+  "indexes": [
+    {"collectionGroup":"bookings","queryScope":"COLLECTION","fields":[{"fieldPath":"customerUid","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"bookings","queryScope":"COLLECTION","fields":[{"fieldPath":"riderUid","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"platformRevenue","queryScope":"COLLECTION","fields":[{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"walletLedger","queryScope":"COLLECTION","fields":[{"fieldPath":"riderUid","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]}
+  ],
+  "fieldOverrides": []
+}

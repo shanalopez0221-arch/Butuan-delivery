@@ -287,16 +287,25 @@ $("f").addEventListener("submit", function(e){
     $("msg").className = "err"; $("msg").textContent = "Fill in your name, number, pickup, and drop-off first."; return;
   }
   $("msg").className = ""; $("msg").textContent = "Sending…";
+  var selectedPay = $("pay").value;
   var data = { customerUid: user.uid, cat: $("cat").value,
     name: v("name"), phone: v("phone"), pickup: v("pu"), dropoff: v("do"), km: parseFloat($("km").value) || 1,
-    size: $("size").selectedOptions[0].text, pay: $("pay").value, note: v("note"), fare: fare(),
-    status: "new", riderEmail: "", createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    size: $("size").selectedOptions[0].text, pay: selectedPay, note: v("note"), fare: fare(),
+    status: "new", paymentStatus: selectedPay === "GCash" ? "pending" : "not_required",
+    riderEmail: "", createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   if (pins.pu){ data.puLat = pins.pu[0]; data.puLng = pins.pu[1]; }
   if (pins.do){ data.doLat = pins.do[0]; data.doLng = pins.do[1]; }
   col.add(data).then(function(ref){
-    $("msg").textContent = ""; $("f").reset(); pins = { pu: null, do: null }; auto = { pu: "", do: "" }; $("pu-ok").textContent = ""; $("do-ok").textContent = ""; $("kmnote").textContent = ""; render(); prefill(); syncChips(); closeBook(); go("mine"); toast("Booking sent. We will assign a rider soon.");
-  }).catch(function(){ $("msg").className = "err"; $("msg").textContent = "Could not send. Check your internet and try again."; });
+    if (selectedPay !== "GCash") return { ref: ref, paid: false };
+    $("msg").textContent = "Opening secure GCash checkout…";
+    return securePost("createCheckout", { kind: "booking", bookingId: ref.id, amount: data.fare, successUrl: location.href, cancelUrl: location.href }).then(function(r){
+      window.location.href = r.checkoutUrl;
+      return { ref: ref, paid: false };
+    });
+  }).then(function(){
+    $("msg").textContent = ""; $("f").reset(); pins = { pu: null, do: null }; auto = { pu: "", do: "" }; $("pu-ok").textContent = ""; $("do-ok").textContent = ""; $("kmnote").textContent = ""; render(); prefill(); syncChips(); closeBook(); go("mine"); toast(selectedPay === "GCash" ? "GCash checkout opened. Booking activates after payment confirmation." : "Booking sent. We will assign a rider soon.");
+  }).catch(function(err){ $("msg").className = "err"; $("msg").textContent = err.message || "Could not send. Check your internet and try again."; });
 });
 // ---- DALIGO screens ----
 function greet(fn){ var h = new Date().getHours(); $("greet").textContent = (h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening") + ", " + fn + "!"; }

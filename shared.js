@@ -4,7 +4,7 @@ var CONFIG = {
   baseFare: 0, includedKm: 0, perKm: 50,   // fare = km x perKm (+ item size fee)
   platformFeeRate: 0.20,                  // DALIGO keeps 20% of each completed delivery
   riderMinWallet: 300,                    // cash bookings require at least ₱300 rider wallet balance
-  ownerGcash: "09066483582",              // DALIGO GCash account for rider wallet top-ups / settlement
+  functionsBaseUrl: "https://us-central1-butuan-delivery.cloudfunctions.net",
   firebase: {
     apiKey: "AIzaSyCWyH0IcE6uZgzsToisEeom2l8SkbQjYa0",
     authDomain: "butuan-delivery.firebaseapp.com",
@@ -68,7 +68,8 @@ function proofBtn(text, field, status, d){
   f.onchange = function(){
     if (!f.files[0]) return; t.textContent = "Uploading…";
     squeeze(f.files[0], 720, 0.6).then(function(url){
-        if (status === "delivered" && modeForProof === "rider") return settleDelivery(d, url, field);
+        if (modeForProof === "rider" && status === "delivered") return settleDelivery(d, url, field);
+        if (modeForProof === "rider" && status === "picked_up") return securePost("markPickedUp", { bookingId: d.id, photoUrl: url });
         var u = { status: status }; u[field] = url; return d.ref.update(u);
       })
       .catch(function(){ t.textContent = "Upload failed. Tap to try again."; });
@@ -118,12 +119,9 @@ function card(d, mode){
           toast("This rider needs at least " + peso(platformFee(b)) + " in DALIGO wallet to reserve the DALIGO platform fee for this GCash booking.");
           return;
         }
-        d.ref.update({
-          riderEmail: r, riderName: f.name || "", riderPhone: f.phone || "",
-          riderGcash: f.gcash || "", status: "assigned",
-          platformFee: platformFee(b), riderEarnings: riderEarnings(b),
-          settlementStatus: "pending"
-        }).catch(function(){ toast("Could not assign rider."); });
+        securePost("assignRider", { bookingId: d.id, riderUid: f.uid || "", riderEmail: r })
+          .then(function(){ toast("Rider assigned."); })
+          .catch(function(err){ toast(err.message || "Could not assign rider."); });
       };
       c.appendChild(g);
     } else if (b.riderEmail) c.appendChild(el("p", "Rider: " + b.riderEmail));
@@ -137,30 +135,27 @@ function card(d, mode){
   }
   return c;
 }
-function settleDelivery(d, photoUrl, field){
-  var b = d.data(), fee = platformFee(b);
-  if (!user || !b.riderEmail){ return Promise.reject(new Error("No rider")); }
-  var riderRef = db.collection("riders").doc(user.uid);
-  return db.runTransaction(function(tx){
-    return tx.get(riderRef).then(function(rd){
-      if (!rd.exists) throw new Error("Rider account not found.");
-      var r = rd.data(), bal = walletAmount(r);
-      if (bal < fee) throw new Error("Your DALIGO wallet has only " + peso(bal) + ". Please top up at least " + peso(fee) + " before completing this delivery.");
-      var newBal = bal - fee;
-      tx.update(riderRef, { walletBalance: newBal, walletUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-      tx.update(d.ref, {
-        status: "delivered", [field]: photoUrl,
-        platformFee: fee, riderEarnings: riderEarnings(b),
-        settlementStatus: "settled", settledAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      tx.set(db.collection("platformRevenue").doc(), {
-        bookingId: d.id, riderUid: user.uid, riderEmail: user.email.toLowerCase(),
-        amount: fee, paymentMethod: b.pay || "Unknown", source: "rider_wallet",
-        ownerGcash: CONFIG.ownerGcash, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+function securePost(action, payload){
+  if (!user) return Promise.reject(new Error("Please sign in first."));
+  return user.getIdToken().then(function(token){
+    return fetch((CONFIG.functionsBaseUrl || "") + "/" + action, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+      body: JSON.stringify(payload || {})
     });
-  }).catch(function(err){ if (window.toast) toast(err.message || "Could not complete delivery."); else alert(err.message || "Could not complete delivery."); throw err; });
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if (!r.ok) throw new Error(j.error || "Request failed.");
+      return j;
+    });
+  });
 }
+function settleDelivery(d, photoUrl, field){
+  if (!user || !d || !d.id) return Promise.reject(new Error("No rider or booking."));
+  return securePost("completeDelivery", { bookingId: d.id, photoUrl: photoUrl || "", photoField: field || "deliveryPhoto" })
+    .catch(function(err){ if (window.toast) toast(err.message || "Could not complete delivery."); else alert(err.message || "Could not complete delivery."); throw err; });
+}
+
 function draw(box, snap, mode, empty){
   box.textContent = ""; box.classList.remove("box", "err");
   var n = 0;
