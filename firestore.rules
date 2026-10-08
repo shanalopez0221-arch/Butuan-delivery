@@ -1,55 +1,139 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
+
+    // ---- helpers ----
     function isAdmin() {
-      return signedIn() && request.auth.token.email == 'shanalopez0221@gmail.com';
+      return request.auth != null && request.auth.token.email == 'shanalopez0221@gmail.com';
     }
-    function own(uid) { return signedIn() && request.auth.uid == uid; }
+    function isMyJob() {
+      return request.auth != null && resource.data.riderEmail == request.auth.token.email;
+    }
+    function isMine() {
+      return request.auth != null && resource.data.customerUid == request.auth.uid;
+    }
+    function approved() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+    function riderOk() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/riders/$(request.auth.uid)).data.status == 'approved';
+    }
+    // Your cut of a fare. 20 = 20%. Keep it the same as commissionPct in shared.js
+    function commission(fare) {
+      return math.ceil(fare * 20 / 100);
+    }
+    function bookingPath(id) {
+      return /databases/$(database)/documents/bookings/$(id);
+    }
 
+    // ---- customers ----
     match /users/{uid} {
-      allow read: if own(uid) || isAdmin();
-      allow create: if own(uid) && request.resource.data.email == request.auth.token.email;
-      allow update: if own(uid) || isAdmin();
-      allow delete: if own(uid) || isAdmin();
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly(['name','phone','email','idType','idPhoto','status','createdAt'])
+        && request.resource.data.idPhoto.size() < 700000;
+      allow get: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow update: if isAdmin();
     }
 
+    // ---- riders (wallet lives here; riders can never set their own balance) ----
     match /riders/{uid} {
-      allow read: if own(uid) || isAdmin();
-      allow create: if own(uid);
-      // Wallet balance, approval status and other financial fields are server-controlled.
-      allow update: if isAdmin() || (own(uid) &&
-        request.resource.data.walletBalance == resource.data.walletBalance &&
-        request.resource.data.status == resource.data.status);
-      allow delete: if isAdmin() || own(uid);
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly(['name','phone','email','plate','gcash','license','orPhoto','crPhoto','front','back','status','createdAt'])
+        && request.resource.data.license.size() < 200000
+        && request.resource.data.orPhoto.size() < 200000
+        && request.resource.data.crPhoto.size() < 200000
+        && request.resource.data.front.size() < 200000
+        && request.resource.data.back.size() < 200000;
+      allow get: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow update: if isAdmin()
+        // 1) rejected rider sends documents again
+        || (request.auth != null && request.auth.uid == uid
+            && resource.data.status == 'rejected'
+            && request.resource.data.status == 'pending'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['license','orPhoto','crPhoto','front','back','status'])
+            && request.resource.data.license.size() < 200000
+            && request.resource.data.orPhoto.size() < 200000
+            && request.resource.data.crPhoto.size() < 200000
+            && request.resource.data.front.size() < 200000
+            && request.resource.data.back.size() < 200000)
+        // 2) the platform fee: only allowed in the same batch that marks the booking delivered,
+        //    and only for exactly the commission of that booking
+        || (request.auth != null && request.auth.uid == uid
+            && resource.data.status == 'approved'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wallet','lastJob'])
+            && request.resource.data.lastJob is string
+            && exists(bookingPath(request.resource.data.lastJob))
+            && get(bookingPath(request.resource.data.lastJob)).data.riderEmail == request.auth.token.email
+            && get(bookingPath(request.resource.data.lastJob)).data.status == 'picked_up'
+            && getAfter(bookingPath(request.resource.data.lastJob)).data.status == 'delivered'
+            && request.resource.data.wallet == resource.data.get('wallet', 0) - commission(get(bookingPath(request.resource.data.lastJob)).data.fare));
+      allow delete: if isAdmin() || (request.auth != null && request.auth.uid == uid);
+
+      // wallet history: top-ups (written by admin) and platform fees (written with each delivery)
+      match /txns/{tid} {
+        allow get, list: if request.auth != null && (request.auth.uid == uid || isAdmin());
+        allow create: if isAdmin()
+          || (request.auth != null && request.auth.uid == uid
+              && request.resource.data.keys().hasOnly(['type','amount','job','note','createdAt'])
+              && request.resource.data.type == 'commission'
+              && request.resource.data.job is string
+              && tid == 'c_' + request.resource.data.job
+              && request.resource.data.createdAt == request.time
+              && (!('note' in request.resource.data) || request.resource.data.note.size() <= 120)
+              && exists(bookingPath(request.resource.data.job))
+              && get(bookingPath(request.resource.data.job)).data.riderEmail == request.auth.token.email
+              && get(bookingPath(request.resource.data.job)).data.status == 'picked_up'
+              && getAfter(bookingPath(request.resource.data.job)).data.status == 'delivered'
+              && request.resource.data.amount == -commission(get(bookingPath(request.resource.data.job)).data.fare));
+        allow update, delete: if false;
+      }
     }
 
+    // ---- top-up requests (doc id = the payment reference number, so one reference can only be used once) ----
+    match /topups/{id} {
+      allow create: if request.auth != null && riderOk()
+        && request.resource.data.keys().hasOnly(['riderUid','riderEmail','riderName','amount','ref','proof','status','createdAt'])
+        && request.resource.data.riderUid == request.auth.uid
+        && request.resource.data.riderEmail == request.auth.token.email
+        && request.resource.data.status == 'pending'
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 100
+        && request.resource.data.amount <= 20000
+        && request.resource.data.ref is string
+        && request.resource.data.ref.matches('^[A-Z0-9]{6,30}$')
+        && id == request.resource.data.ref
+        && request.resource.data.proof.size() < 300000;
+      allow get, list: if isAdmin() || (request.auth != null && resource.data.riderUid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ---- bookings ----
     match /bookings/{id} {
-      allow read: if signedIn() && (resource.data.customerUid == request.auth.uid ||
-        resource.data.riderUid == request.auth.uid || isAdmin());
-      allow create: if signedIn() && request.resource.data.customerUid == request.auth.uid &&
-        request.resource.data.status == 'new';
-      // Assignment, pickup, delivery, commission and payment state are server-controlled.
-      allow update, delete: if isAdmin();
-    }
-
-    match /walletLedger/{id} {
-      allow read: if signedIn() && (resource.data.riderUid == request.auth.uid || isAdmin());
-      allow write: if isAdmin();
-    }
-
-    match /walletTopups/{id} {
-      allow read: if signedIn() && (resource.data.riderUid == request.auth.uid || isAdmin());
-      allow write: if isAdmin();
-    }
-
-    match /platformRevenue/{id} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
+      allow create: if request.auth != null && approved()
+        && request.resource.data.customerUid == request.auth.uid
+        && request.resource.data.status == 'new'
+        && request.resource.data.riderEmail == ''
+        && request.resource.data.fare is number
+        && request.resource.data.keys().hasOnly(['name','phone','pickup','dropoff','km','size','pay','note','fare','status','riderEmail','createdAt','puLat','puLng','doLat','doLng','customerUid','cat']);
+      allow get, list: if isAdmin() || isMine() || (isMyJob() && riderOk());
+      allow update: if isAdmin()
+        || (isMyJob() && riderOk()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','pickupPhoto','deliveryPhoto','riderLat','riderLng','riderAt'])
+            && (request.resource.data.status == resource.data.status
+                || (resource.data.status == 'assigned' && request.resource.data.status == 'picked_up')
+                || (resource.data.status == 'picked_up' && request.resource.data.status == 'delivered'))
+            // a job cannot be marked delivered unless the platform fee is taken in the same batch
+            && (request.resource.data.status != 'delivered'
+                || getAfter(/databases/$(database)/documents/riders/$(request.auth.uid)).data.get('lastJob', '') == id)
+            && (!('pickupPhoto' in request.resource.data) || request.resource.data.pickupPhoto.size() < 400000)
+            && (!('deliveryPhoto' in request.resource.data) || request.resource.data.deliveryPhoto.size() < 400000));
+      allow delete: if false;
     }
   }
 }

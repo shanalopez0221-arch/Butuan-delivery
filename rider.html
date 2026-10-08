@@ -11,6 +11,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,800;1,600;1,900&display=swap">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="daligo.css">
+<style>
+.wal{text-align:center}.bal{font-size:2.6rem;font-weight:900;color:var(--navy);letter-spacing:-.02em}.bal.low{color:#B3261E}
+.chipa{display:block;padding:12px 4px;text-align:center;border-radius:999px;border:2px solid var(--line);background:#fff;color:var(--navy);font-weight:800;text-decoration:none}
+#tuamts{margin:12px 0 4px}.tx{display:flex;justify-content:space-between;align-items:center;gap:10px}.tx p{margin:2px 0 0}.pos{color:#0B6B63}.neg{color:#B3261E}
+</style>
 </head>
 <body>
 <header class="top">
@@ -26,8 +31,8 @@
   <label for="rp">Mobile number</label><input id="rp" type="tel" inputmode="tel" autocomplete="tel">
   <label for="re">Email</label><input id="re" type="email" autocomplete="email">
   <label for="rpw">Password (6 or more characters)</label><input id="rpw" type="password" autocomplete="new-password">
+  <label for="rg">Your GCash number (customers pay you here)</label><input id="rg" type="tel" inputmode="numeric" placeholder="09XXXXXXXXX">
   <label for="rpl">Motorcycle plate number</label><input id="rpl" autocapitalize="characters">
-  <label for="rgc">Rider GCash number</label><input id="rgc" type="tel" inputmode="numeric" placeholder="09XXXXXXXXX">
   <div id="docs-signup"></div>
   <label class="chk"><input id="rc" type="checkbox">I agree that Butuan Delivery keeps my documents to check my application. Only the admin can see them.</label>
   <button class="go" type="submit">Send application</button>
@@ -49,31 +54,34 @@
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
 <div id="app" class="hide">
-  <section id="vjobs">
-  <h2 class="greet" id="greet" style="margin-bottom:6px">Your jobs</h2>
-  <div class="box wallet-card">
-    <div class="wallet-head"><div><span class="hint">DALIGO wallet</span><b id="wallet">₱0</b></div><span id="walletst" class="st">Top-up required for cash jobs</span></div>
-    <p class="hint">Minimum wallet for cash bookings: <b id="walletmin">₱300</b></p>
-    <p class="hint">Your top-up becomes credit in your DALIGO wallet after secure payment confirmation. DALIGO does not display a personal GCash number for top-ups.</p>
-    <div class="row">
-      <input id="topupamt" type="number" min="300" step="50" placeholder="Amount">
+  <section id="vjobs"><h2 class="greet" id="greet" style="margin-bottom:6px">Your jobs</h2><div id="lowbal" class="box hide"></div><p id="gps" class="hint"></p><div id="rjobs"></div></section>
+  <section id="vwallet" class="hide">
+    <h2 class="greet" style="margin-bottom:14px">Wallet</h2>
+    <div class="box wal"><p class="hint" style="margin:0">Your balance</p><div class="bal" id="bal">₱0</div><p id="balnote" class="hint"></p></div>
+    <div class="box">
+      <b>Top up</b>
+      <p class="hint">Pick an amount, pay with GCash, Maya or card on the secure DALIGO payment page. Then send your reference number below so the admin can add it to your wallet.</p>
+      <div class="chips" id="tuamts"></div>
+      <form id="tuform" novalidate>
+        <label for="tua">Amount you paid (₱)</label><input id="tua" type="number" inputmode="numeric" min="100" step="1">
+        <label for="tur">Reference number from your receipt</label><input id="tur" autocapitalize="characters" autocomplete="off">
+        <label for="tup">Screenshot of your receipt</label><input id="tup" type="file" accept="image/*">
+        <button class="go" type="submit">Send top-up for approval</button>
+        <p id="tumsg" class="hint" role="status"></p>
+      </form>
     </div>
-    <button class="sm" id="topup" type="button">Top up wallet securely</button>
-    <p id="topupmsg" class="hint"></p>
-    <div class="box" style="margin-top:10px;padding:12px">
-      <b>Wallet history</b><div id="walletHistory"><p class="hint">No wallet transactions yet.</p></div>
-    </div>
-  </div>
-  <p id="gps" class="hint"></p><div id="rjobs"></div>
-</section>
+    <h2 class="sec">Top-up requests</h2><div id="tulist"></div>
+    <h2 class="sec">History</h2><div id="txlist"></div>
+  </section>
   <section id="vprofile" class="hide">
     <h2 class="greet" style="margin-bottom:14px">Profile</h2>
-    <div class="box"><b id="pname"></b><p id="pinfo" class="hint"></p><p id="pplate" class="hint"></p><p id="pgcash" class="hint"></p><p><span class="st">Approved rider</span></p><button class="sm" id="out2" type="button">Sign out</button></div>
+    <div class="box"><b id="pname"></b><p id="pinfo" class="hint"></p><p id="pplate" class="hint"></p><p id="pgc" class="hint"></p><p><span class="st">Approved rider</span></p><button class="sm" id="out2" type="button">Sign out</button></div>
   </section>
 </div>
 </main>
 <nav id="tabs" class="hide">
   <button type="button" data-t="vjobs" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Jobs</button>
+  <button type="button" data-t="vwallet"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M16 15h2"/></svg>Wallet</button>
   <button type="button" data-t="vprofile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</button>
 </nav>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -111,13 +119,10 @@ function refresh(){
   if (ok){
     var fn = rid.name.split(" ")[0];
     $("av").textContent = fn.charAt(0).toUpperCase(); $("avn").textContent = fn; $("greet").textContent = "Hi, " + fn + "! Your jobs";
-    $("pname").textContent = rid.name; $("pinfo").textContent = rid.phone + " · " + rid.email; $("pplate").textContent = "Plate: " + rid.plate;
-    $("pgcash").textContent = "GCash: " + (rid.gcash || "Not added");
-    $("wallet").textContent = peso(walletAmount(rid)); $("walletmin").textContent = peso(CONFIG.riderMinWallet);
-    $("walletst").textContent = walletAmount(rid) >= CONFIG.riderMinWallet ? "Ready for cash jobs" : "Top-up required for cash jobs";
-    $("walletst").className = walletAmount(rid) >= CONFIG.riderMinWallet ? "st ok" : "st warn";
+    $("pname").textContent = rid.name; $("pinfo").textContent = rid.phone + " · " + rid.email; $("pplate").textContent = "Plate: " + rid.plate; $("pgc").textContent = "GCash: " + (rid.gcash || "not set");
+    drawWallet();
   }
-  if (ok) { watchRider(); watchWalletHistory(); } else { stop("rider"); stop("walletLedger"); $("rjobs").textContent = ""; $("walletHistory").textContent = ""; stopGeo(); }
+  if (ok){ watchRider(); watchWallet(); } else { stop("rider"); stop("tu"); stop("tx"); $("rjobs").textContent = ""; stopGeo(); }
 }
 startAuth(function(u){
   rid = null; loaded = false;
@@ -127,12 +132,12 @@ startAuth(function(u){
 $("rsignup").addEventListener("submit", function(e){
   e.preventDefault();
   var g = function(i){ return $(i).value.trim(); }, m = $("rmsg"), docs;
-  if (!g("rn") || !g("rp") || !g("re") || !g("rpl") || $("rpw").value.length < 6 || !hasDocs("s_")){ m.className = "err"; m.textContent = "Fill in every field, use a password of 6 or more characters, and add all 5 photos."; return; }
+  if (!g("rn") || !g("rp") || !g("re") || !g("rpl") || !/^09\d{9}$/.test(g("rg")) || $("rpw").value.length < 6 || !hasDocs("s_")){ m.className = "err"; m.textContent = "Fill in every field, use a valid GCash number (09XXXXXXXXX), a password of 6 or more characters, and add all 5 photos."; return; }
   if (!$("rc").checked){ m.className = "err"; m.textContent = "Please agree to the document check first."; return; }
   busy = true; m.className = "hint"; m.textContent = "Sending your application. This can take a minute…";
   readDocs("s_").then(function(o){ docs = o; return auth.createUserWithEmailAndPassword(g("re"), $("rpw").value); })
     .then(function(cr){
-      var data = { name: g("rn"), phone: g("rp"), email: g("re").toLowerCase(), plate: g("rpl").toUpperCase(), gcash: g("rgc"), walletBalance: 0, walletUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(), status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+      var data = { name: g("rn"), phone: g("rp"), email: g("re").toLowerCase(), plate: g("rpl").toUpperCase(), gcash: g("rg"), status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp() };
       DOCS.forEach(function(d){ data[d[0]] = docs[d[0]]; });
       return db.collection("riders").doc(cr.user.uid).set(data);
     })
@@ -147,28 +152,6 @@ $("rredo").addEventListener("submit", function(e){
   readDocs("r_").then(function(o){ o.status = "pending"; return db.collection("riders").doc(user.uid).update(o); })
     .catch(function(){ $("rst").textContent = "Could not send. Try again."; });
 });
-$("topup").onclick = function(){
-  var amount = Math.round(Number($("topupamt").value) || 0);
-  if (amount < CONFIG.riderMinWallet){ $("topupmsg").textContent = "Minimum top-up is " + peso(CONFIG.riderMinWallet) + "."; return; }
-  $("topupmsg").textContent = "Opening secure GCash checkout…";
-  securePost("createCheckout", { kind: "rider_topup", amount: amount, successUrl: location.href, cancelUrl: location.href })
-    .then(function(r){ window.location.href = r.checkoutUrl; })
-    .catch(function(err){ $("topupmsg").textContent = err.message || "Could not start the secure checkout."; });
-};
-function watchWalletHistory(){
-  if (unsubs.walletLedger) return;
-  unsubs.walletLedger = db.collection("walletLedger").where("riderUid", "==", user.uid).limit(30).onSnapshot(function(sn){
-    var box = $("walletHistory"); box.textContent = "";
-    var rows = sn.docs.slice().sort(function(a,b){ return ts(b) - ts(a); });
-    if (!rows.length){ box.appendChild(el("p", "No wallet transactions yet.", "hint")); return; }
-    rows.forEach(function(d){ var x=d.data(), row=el("div",null,"trow");
-      var left=el("div"), right=el("div"); left.appendChild(el("b", x.description || x.type || "Wallet transaction"));
-      left.appendChild(el("p", x.bookingId ? "Booking: " + x.bookingId : "", "hint"));
-      right.style.textAlign="right"; right.appendChild(el("b", (x.direction === "debit" ? "−" : "+") + peso(x.amount)));
-      right.appendChild(el("p", "Balance " + peso(x.balanceAfter), "hint")); row.appendChild(left); row.appendChild(right); box.appendChild(row);
-    });
-  });
-}
 function watchRider(){
   if (unsubs.rider) return;
   var box = $("rjobs");
@@ -195,12 +178,74 @@ function onPos(p){
 }
 function stopGeo(){ if (geo !== null){ navigator.geolocation.clearWatch(geo); geo = null; } jobs = []; $("gps").textContent = ""; }
 function go(t){
-  ["vjobs", "vprofile"].forEach(function(x){ $(x).classList.toggle("hide", x !== t); });
+  ["vjobs", "vwallet", "vprofile"].forEach(function(x){ $(x).classList.toggle("hide", x !== t); });
   document.querySelectorAll("#tabs button").forEach(function(b){ b.classList.toggle("on", b.dataset.t === t); });
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("#tabs button").forEach(function(b){ b.onclick = function(){ go(b.dataset.t); }; });
 $("out2").onclick = function(){ auth.signOut(); };
+
+// ---- wallet ----
+function bal(){ return (rid && rid.wallet) || 0; }
+function drawWallet(){
+  var b = bal(), low = b < CONFIG.minBalance;
+  $("bal").textContent = peso(b); $("bal").classList.toggle("low", low);
+  $("balnote").textContent = low ? "Top up at least " + peso(CONFIG.minBalance - Math.max(0, b)) + " more to get jobs." : "You can get jobs. Your fee comes off this balance after each delivery.";
+  var lb = $("lowbal"); lb.classList.toggle("hide", !low); lb.textContent = "";
+  if (low){ lb.appendChild(el("b", "Top up to get jobs")); lb.appendChild(el("p", "Your wallet is " + peso(b) + ". The minimum is " + peso(CONFIG.minBalance) + ". The admin can only give you jobs once you reach it.", "hint")); var tb = el("button", "Open wallet", "sm"); tb.type = "button"; tb.onclick = function(){ go("vwallet"); }; lb.appendChild(tb); }
+  var box = $("tuamts"); if (!box.firstChild) Object.keys(CONFIG.topupLinks).forEach(function(a){
+    var l = el("a", "₱" + a), u = CONFIG.topupLinks[a];
+    l.className = "chipa"; l.target = "_blank"; l.rel = "noopener";
+    if (u) l.href = u; else { l.href = "#"; l.onclick = function(e){ e.preventDefault(); $("tumsg").textContent = "Top-up links are not set up yet. Ask the admin."; }; }
+    l.addEventListener("click", function(){ $("tua").value = a; });
+    box.appendChild(l);
+  });
+}
+function watchWallet(){
+  if (unsubs.tu) return;
+  unsubs.tu = db.collection("topups").where("riderUid", "==", user.uid).onSnapshot(function(sn){
+    var box = $("tulist"), rows = []; box.textContent = "";
+    sn.forEach(function(d){ rows.push(d.data()); });
+    rows.sort(function(a, b){ return (b.createdAt ? b.createdAt.toMillis() : Infinity) - (a.createdAt ? a.createdAt.toMillis() : Infinity); });
+    rows.slice(0, 15).forEach(function(t){
+      var c = el("div", null, "box job"), s = el("span", {pending: "Waiting for approval", approved: "Added to wallet", rejected: "Not approved"}[t.status] || t.status, "st");
+      c.appendChild(el("b", peso(t.amount))); c.appendChild(el("p", "Ref " + t.ref, "hint")); var p = el("p"); p.appendChild(s); c.appendChild(p);
+      if (t.status === "rejected") c.appendChild(el("p", "Check the amount and reference, then send a new request with the correct reference number.", "hint"));
+      box.appendChild(c);
+    });
+    if (!rows.length) box.appendChild(el("p", "No top-ups yet.", "box hint"));
+  }, function(){});
+  unsubs.tx = db.collection("riders").doc(user.uid).collection("txns").orderBy("createdAt", "desc").limit(30).onSnapshot(function(sn){
+    var box = $("txlist"); box.textContent = "";
+    sn.forEach(function(d){
+      var t = d.data(), c = el("div", null, "box tx"), l = el("div"), when = t.createdAt ? t.createdAt.toDate().toLocaleDateString("en-PH", { month: "short", day: "numeric" }) : "";
+      l.appendChild(el("b", t.type === "topup" ? "Top-up" : "Platform fee")); l.appendChild(el("p", (t.note || "") + (when ? " · " + when : ""), "hint"));
+      c.appendChild(l); c.appendChild(el("b", (t.amount > 0 ? "+" : "") + peso(t.amount), t.amount > 0 ? "pos" : "neg")); box.appendChild(c);
+    });
+    if (!box.firstChild) box.appendChild(el("p", "Your top-ups and fees will show here.", "box hint"));
+  }, function(){});
+}
+$("tuform").addEventListener("submit", function(e){
+  e.preventDefault();
+  var m = $("tumsg"), amt = parseInt($("tua").value, 10), ref = $("tur").value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""), f = $("tup").files[0];
+  m.className = "err";
+  if (!(amt >= CONFIG.minBalance)){ m.textContent = "Minimum top-up is " + peso(CONFIG.minBalance) + "."; return; }
+  if (!/^[A-Z0-9]{6,30}$/.test(ref)){ m.textContent = "Enter the reference number exactly as on your receipt (letters and numbers, 6 or more)."; return; }
+  if (!f){ m.textContent = "Add a screenshot of your receipt."; return; }
+  m.className = "hint"; m.textContent = "Sending…";
+  squeezeTo(f, 200000).then(function(url){
+    return db.collection("topups").doc(ref).set({ riderUid: user.uid, riderEmail: user.email.toLowerCase(), riderName: rid.name, amount: amt, ref: ref, proof: url, status: "pending", createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  }).then(function(){ m.textContent = "Sent. The admin will check it and add it to your wallet."; $("tuform").reset(); })
+    .catch(function(){ m.className = "err"; m.textContent = "Could not send. This reference number may already be used. Check it and try again."; });
+});
+// Called when a rider finishes a job: marks it delivered and takes the platform fee in one atomic write
+window.deliverJob = function(d, url){
+  var b = d.data(), f = fee(b.fare), rr = db.collection("riders").doc(user.uid), batch = db.batch(), FV = firebase.firestore.FieldValue;
+  batch.update(d.ref, { status: "delivered", deliveryPhoto: url });
+  batch.update(rr, { wallet: FV.increment(-f), lastJob: d.id });
+  batch.set(rr.collection("txns").doc("c_" + d.id), { type: "commission", amount: -f, job: d.id, note: (b.pickup + " to " + b.dropoff).slice(0, 120), createdAt: FV.serverTimestamp() });
+  return batch.commit();
+};
 </script>
 </body>
 </html>

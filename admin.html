@@ -32,15 +32,20 @@
 <div id="app" class="hide">
   <section id="tj"><h2 class="greet" style="margin-bottom:14px">Bookings</h2><div id="ajobs"></div></section>
   <section id="tr" class="hide"><h2 class="greet" style="margin-bottom:14px">Rider applications</h2><div id="arids"></div></section>
+  <section id="tw" class="hide">
+    <h2 class="greet" style="margin-bottom:14px">Wallets</h2>
+    <div class="box"><p class="hint" style="margin:0">Your commission earned (all delivered jobs)</p><div class="bal" id="rev" style="font-size:2rem;font-weight:900;color:var(--navy)">₱0</div></div>
+    <h2 class="sec">Top-ups to approve</h2><div id="atus"></div>
+    <h2 class="sec">Rider balances</h2><div id="awal"></div>
+  </section>
   <section id="ti" class="hide"><h2 class="greet" style="margin-bottom:14px">Customer IDs</h2><div id="aids"></div></section>
-  <section id="tf" class="hide"><h2 class="greet" style="margin-bottom:14px">Revenue & Wallets</h2><div id="finance"></div></section>
 </div>
 </main>
 <nav id="tabs" class="hide">
   <button type="button" data-t="tj" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M8 14l3 3 5-6"/></svg>Bookings</button>
   <button type="button" data-t="tr"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h5l3-7h3M9 10h3"/></svg>Riders<span class="nb hide" id="nr"></span></button>
+  <button type="button" data-t="tw"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M16 15h2"/></svg>Wallets<span class="nb hide" id="nt"></span></button>
   <button type="button" data-t="ti"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c0-2 6-2 6 0M15 10h3M15 14h3"/></svg>IDs<span class="nb hide" id="ni"></span></button>
-  <button type="button" data-t="tf">Finance</button>
 </nav>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -48,15 +53,15 @@
 <script src="shared.js"></script>
 <script>
 startAuth(function(u){
-  ["ajobs", "arids", "aids", "finance"].forEach(function(i){ $(i).textContent = ""; $(i).classList.remove("box", "err"); });
+  ["ajobs", "arids", "aids", "atus", "awal"].forEach(function(i){ $(i).textContent = ""; $(i).classList.remove("box", "err"); });
   var ok = !!u && isAdmin();
   $("app").classList.toggle("hide", !ok); $("tabs").classList.toggle("hide", !ok); $("avatar").classList.toggle("hide", !ok);
   $("who").classList.toggle("hide", !u || ok);
   $("amsg").textContent = u && !ok ? "This account is not the admin." : ""; $("amsg").classList.toggle("hide", !(u && !ok));
-  if (ok){ $("av").textContent = "A"; $("avn").textContent = "Admin"; watchRiderApps(); watchApprovedRiders(); watchIds(); watchAdmin(); watchFinance(); }
+  if (ok){ $("av").textContent = "A"; $("avn").textContent = "Admin"; watchRiderApps(); watchApprovedRiders(); watchTopups(); watchRevenue(); watchIds(); watchAdmin(); }
 });
 function go(t){
-  ["tj", "tr", "ti", "tf"].forEach(function(x){ $(x).classList.toggle("hide", x !== t); });
+  ["tj", "tr", "tw", "ti"].forEach(function(x){ $(x).classList.toggle("hide", x !== t); });
   document.querySelectorAll("#tabs button").forEach(function(b){ b.classList.toggle("on", b.dataset.t === t); });
   window.scrollTo(0, 0);
 }
@@ -108,60 +113,64 @@ function watchRiderApps(){
     if (!box.firstChild) box.appendChild(el("p", "No rider applications waiting.", "box hint"));
   }, fail(box));
 }
+
+function drawWallets(sn){
+  var box = $("awal"); box.textContent = "";
+  sn.forEach(function(d){
+    var u = d.data(), w = u.wallet || 0, c = el("div", null, "box job");
+    c.appendChild(el("b", u.name + " · " + peso(w))); c.appendChild(el("p", u.phone + " · GCash " + (u.gcash || "not set"), "hint"));
+    if (w < CONFIG.minBalance) c.appendChild(el("p", "Below " + peso(CONFIG.minBalance) + ". Cannot be given jobs.", "err"));
+    box.appendChild(c);
+  });
+  if (!box.firstChild) box.appendChild(el("p", "No approved riders yet.", "box hint"));
+}
+function watchRevenue(){
+  if (unsubs.rev) return;
+  unsubs.rev = col.where("status", "==", "delivered").onSnapshot(function(sn){
+    var t = 0; sn.forEach(function(d){ t += fee(d.data().fare || 0); }); $("rev").textContent = peso(t);
+  });
+}
+function watchTopups(){
+  if (unsubs.tus) return;
+  var box = $("atus");
+  unsubs.tus = db.collection("topups").where("status", "==", "pending").onSnapshot(function(sn){
+    box.textContent = ""; $("nt").textContent = sn.size; $("nt").classList.toggle("hide", !sn.size);
+    sn.forEach(function(d){
+      var t = d.data(), c = el("div", null, "box job");
+      c.appendChild(el("b", t.riderName + " wants to add " + peso(t.amount)));
+      c.appendChild(el("p", t.riderEmail + " · Ref " + t.ref));
+      c.appendChild(el("p", "Check this reference and amount in your PayMongo Payments page before approving.", "hint"));
+      var im = el("img", null, "proof"); im.src = t.proof; im.alt = "Receipt from " + t.riderName; c.appendChild(im);
+      var ok = el("button", "Approve " + peso(t.amount), "sm"), no = el("button", "Reject", "sm"); ok.type = "button"; no.type = "button";
+      ok.onclick = function(){ ok.disabled = no.disabled = true; approveTopup(d.ref).catch(function(){ ok.disabled = no.disabled = false; alert("Could not approve. Try again."); }); };
+      no.onclick = function(){ ok.disabled = no.disabled = true; d.ref.update({ status: "rejected" }); };
+      c.appendChild(ok); c.appendChild(document.createTextNode(" ")); c.appendChild(no); box.appendChild(c);
+    });
+    if (!box.firstChild) box.appendChild(el("p", "No top-ups waiting.", "box hint"));
+  }, fail(box));
+}
+// Credits the rider wallet and logs it. Runs as a transaction so one top-up can never be credited twice.
+function approveTopup(ref){
+  var FV = firebase.firestore.FieldValue;
+  return db.runTransaction(function(tx){
+    return tx.get(ref).then(function(s){
+      var t = s.data(); if (!t || t.status !== "pending") return;
+      var rr = db.collection("riders").doc(t.riderUid);
+      tx.update(ref, { status: "approved", approvedAt: FV.serverTimestamp() });
+      tx.update(rr, { wallet: FV.increment(t.amount) });
+      tx.set(rr.collection("txns").doc("t_" + s.id), { type: "topup", amount: t.amount, note: "Ref " + t.ref, createdAt: FV.serverTimestamp() });
+    });
+  });
+}
 function watchApprovedRiders(){
   if (unsubs.arl) return;
   unsubs.arl = db.collection("riders").where("status", "==", "approved").onSnapshot(function(sn){
     var dl = $("riderlist"); dl.textContent = ""; window.RIDERS = {};
-    sn.forEach(function(d){ var u = d.data(), o = el("option", u.name + " " + u.plate); o.value = u.email; dl.appendChild(o); window.RIDERS[u.email] = { uid: d.id, name: u.name, phone: u.phone, gcash: u.gcash || "", walletBalance: walletAmount(u) }; });
+    sn.forEach(function(d){ var u = d.data(), o = el("option", u.name + " " + u.plate); o.value = u.email; dl.appendChild(o); window.RIDERS[u.email] = { name: u.name, phone: u.phone, gcash: u.gcash || "", wallet: u.wallet || 0 };
+      o.textContent = u.name + " " + u.plate + " (wallet " + peso(u.wallet || 0) + ")"; });
+    drawWallets(sn);
   });
 }
-
-
-function watchFinance(){
-  if (unsubs.finance) return;
-  var box = $("finance");
-  box.innerHTML = '<div class="box"><b>DALIGO Finance</b><p class="hint">Customer GCash payments and rider wallet top-ups are processed through the payment gateway. The owner\'s personal GCash number is not stored in this app.</p><p class="hint">Platform revenue is counted only when a delivery is completed.</p></div>';
-  unsubs.finance = db.collection("platformRevenue").orderBy("createdAt","desc").limit(100).onSnapshot(function(sn){
-    var total = 0, cash = 0, gcash = 0;
-    sn.forEach(function(d){ var x=d.data(), a=Number(x.amount)||0; total += a; if (x.paymentMethod === "Cash") cash += a; if (x.paymentMethod === "GCash") gcash += a; });
-    box.innerHTML = '<div class="box"><b>DALIGO platform revenue</b><p style="font-size:1.7rem;font-weight:800">' + peso(total) + '</p><p class="hint">Cash-job fees: ' + peso(cash) + ' · GCash-job fees: ' + peso(gcash) + '</p><p class="hint">Revenue entries are created only after successful delivery settlement.</p></div>';
-    sn.forEach(function(d){
-      var x=d.data(), c=el("div",null,"box job");
-      c.appendChild(el("b", "Platform fee " + peso(x.amount)));
-      c.appendChild(el("p", (x.paymentMethod||"") + " · " + (x.riderEmail||"Rider")));
-      c.appendChild(el("p", "Booking: " + (x.bookingId||"—") + " · Source: " + (x.source||"ledger"), "hint"));
-      box.appendChild(c);
-    });
-    watchTopups(box); watchWallets(box);
-  }, fail(box));
-}
-function watchTopups(box){
-  if (unsubs.topups) return;
-  unsubs.topups = db.collection("walletTopups").where("status","==","pending").onSnapshot(function(sn){
-    var old = $("pendingTopups"); if (old) old.remove();
-    if (!sn.size) return;
-    var h=el("div",null,"box"); h.id="pendingTopups"; h.appendChild(el("b","Pending wallet payments"));
-    sn.forEach(function(d){
-      var x=d.data(), c=el("div",null,"job");
-      c.appendChild(el("b",x.riderName+" · "+peso(x.amount)));
-      c.appendChild(el("p", "Status: awaiting secure GCash checkout confirmation."));
-      c.appendChild(el("p", "Reference: "+(x.referenceNumber||d.id),"hint"));
-      h.appendChild(c);
-    });
-    box.prepend(h);
-  });
-}
-function watchWallets(box){
-  if (unsubs.wallets) return;
-  unsubs.wallets = db.collection("riders").where("status","==","approved").onSnapshot(function(sn){
-    var old = $("walletsBox"); if (old) old.remove();
-    var h=el("div",null,"box"); h.id="walletsBox"; h.appendChild(el("b","Approved rider wallets"));
-    sn.forEach(function(d){ var x=d.data(), c=el("div",null,"trow");
-      c.appendChild(el("b",x.name||x.email)); c.appendChild(el("span",peso(walletAmount(x)),"st")); h.appendChild(c); });
-    box.appendChild(h);
-  });
-}
-
 </script>
 </body>
 </html>

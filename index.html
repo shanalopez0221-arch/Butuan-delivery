@@ -111,7 +111,7 @@
         <button type="button" data-sel="pay" data-i="1">GCash</button>
       </div>
       <select id="size" class="hide"><option value="0">Small (Bag)</option><option value="30">Medium (Box)</option><option value="80">Large (Sack)</option></select>
-      <select id="pay" class="hide"><option>Cash</option><option>GCash</option></select><p id="paynote" class="hint"></p>
+      <select id="pay" class="hide"><option>Cash</option><option>GCash</option></select>
       <label for="note">Rider instructions</label><textarea id="note" rows="2" placeholder="Who to call, what to pick up"></textarea>
     </div>
     <div class="foot">
@@ -148,12 +148,7 @@ function fare(){
   var km = Math.max(1, parseFloat($("km").value) || 1);
   return Math.round(CONFIG.baseFare + Math.max(0, km - CONFIG.includedKm) * CONFIG.perKm + parseInt($("size").value, 10));
 }
-function render(){
-  $("fare").textContent = "₱" + fare();
-  $("paynote").textContent = $("pay").value === "GCash"
-    ? "GCash payment: after a rider is assigned, the rider's registered GCash number will be shown in your booking. DALIGO platform fees are settled through the rider's wallet."
-    : "Cash payment: rider collects the delivery fare. The DALIGO platform fee is reserved from the rider's wallet.";
-}
+function render(){ $("fare").textContent = "₱" + fare(); }
 ["km","size"].forEach(function(i){ $(i).addEventListener("input", render); });
 render();
 
@@ -287,25 +282,16 @@ $("f").addEventListener("submit", function(e){
     $("msg").className = "err"; $("msg").textContent = "Fill in your name, number, pickup, and drop-off first."; return;
   }
   $("msg").className = ""; $("msg").textContent = "Sending…";
-  var selectedPay = $("pay").value;
   var data = { customerUid: user.uid, cat: $("cat").value,
     name: v("name"), phone: v("phone"), pickup: v("pu"), dropoff: v("do"), km: parseFloat($("km").value) || 1,
-    size: $("size").selectedOptions[0].text, pay: selectedPay, note: v("note"), fare: fare(),
-    status: "new", paymentStatus: selectedPay === "GCash" ? "pending" : "not_required",
-    riderEmail: "", createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    size: $("size").selectedOptions[0].text, pay: $("pay").value, note: v("note"), fare: fare(),
+    status: "new", riderEmail: "", createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   if (pins.pu){ data.puLat = pins.pu[0]; data.puLng = pins.pu[1]; }
   if (pins.do){ data.doLat = pins.do[0]; data.doLng = pins.do[1]; }
   col.add(data).then(function(ref){
-    if (selectedPay !== "GCash") return { ref: ref, paid: false };
-    $("msg").textContent = "Opening secure GCash checkout…";
-    return securePost("createCheckout", { kind: "booking", bookingId: ref.id, amount: data.fare, successUrl: location.href, cancelUrl: location.href }).then(function(r){
-      window.location.href = r.checkoutUrl;
-      return { ref: ref, paid: false };
-    });
-  }).then(function(){
-    $("msg").textContent = ""; $("f").reset(); pins = { pu: null, do: null }; auto = { pu: "", do: "" }; $("pu-ok").textContent = ""; $("do-ok").textContent = ""; $("kmnote").textContent = ""; render(); prefill(); syncChips(); closeBook(); go("mine"); toast(selectedPay === "GCash" ? "GCash checkout opened. Booking activates after payment confirmation." : "Booking sent. We will assign a rider soon.");
-  }).catch(function(err){ $("msg").className = "err"; $("msg").textContent = err.message || "Could not send. Check your internet and try again."; });
+    $("msg").textContent = ""; $("f").reset(); pins = { pu: null, do: null }; auto = { pu: "", do: "" }; $("pu-ok").textContent = ""; $("do-ok").textContent = ""; $("kmnote").textContent = ""; render(); prefill(); syncChips(); closeBook(); go("mine"); toast("Booking sent. We will assign a rider soon.");
+  }).catch(function(){ $("msg").className = "err"; $("msg").textContent = "Could not send. Check your internet and try again."; });
 });
 // ---- DALIGO screens ----
 function greet(fn){ var h = new Date().getHours(); $("greet").textContent = (h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening") + ", " + fn + "!"; }
@@ -375,9 +361,9 @@ function drawTrack(b){
     var rr = el("div", null, "trow"), who = el("div");
     who.appendChild(el("b", b.riderName || "Your rider")); who.appendChild(el("p", "DALIGO Rider", "hint")); rr.appendChild(who);
     if (b.riderPhone){ var a = el("a", "Call rider", "sm"); a.href = "tel:" + b.riderPhone; rr.appendChild(a); }
-    if (b.pay === "GCash" && b.riderGcash) rr.appendChild(el("p", "Rider GCash: " + b.riderGcash, "hint"));
     s.appendChild(rr);
   }
+  if (b.pay === "GCash" && b.riderGcash && b.status !== "delivered"){ var gp = el("p", "Pay your rider by GCash: " + b.riderGcash + " (" + (b.riderName || "rider") + "). Pay ₱" + b.fare + " on pickup or delivery.", "tl"); gp.style.fontWeight = "700"; s.appendChild(gp); }
   [["Pickup", b.pickup], ["Drop-off", b.dropoff], ["Item", b.size], ["Payment", b.pay]].forEach(function(p){ s.appendChild(el("p", p[0] + ": " + p[1], "tl")); });
 }
 $("tback").onclick = closeTrack;
