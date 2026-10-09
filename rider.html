@@ -54,7 +54,10 @@
 </form>
 <div id="who" class="box hide"><span id="whotxt"></span> <button class="sm" id="out" type="button">Sign out</button></div>
 <div id="app" class="hide">
-  <section id="vjobs"><h2 class="greet" id="greet" style="margin-bottom:6px">Your jobs</h2><div id="lowbal" class="box hide"></div><p id="gps" class="hint"></p><div id="rjobs"></div></section>
+  <section id="vjobs"><h2 class="greet" id="greet" style="margin-bottom:6px">Your jobs</h2><div id="lowbal" class="box hide"></div><p id="gps" class="hint"></p><div id="rjobs"></div>
+    <h2 class="sec">Available bookings</h2>
+    <div id="avfilt" class="hide"></div>
+    <div id="ravail"></div></section>
   <section id="vwallet" class="hide">
     <h2 class="greet" style="margin-bottom:14px">Wallet</h2>
     <div class="box wal"><p class="hint" style="margin:0">Your balance</p><div class="bal" id="bal">₱0</div><p id="balnote" class="hint"></p></div>
@@ -123,7 +126,7 @@ function refresh(){
     $("pname").textContent = rid.name; $("pinfo").textContent = rid.phone + " · " + rid.email; $("pplate").textContent = "Plate: " + rid.plate; $("pgc").textContent = "GCash: " + (rid.gcash || "not set");
     drawWallet();
   }
-  if (ok){ watchRider(); watchWallet(); } else { stop("rider"); stop("tu"); stop("tx"); $("rjobs").textContent = ""; stopGeo(); }
+  if (ok){ watchRider(); watchWallet(); watchAvail(); startLocate(); } else { stop("rider"); stop("tu"); stop("tx"); stop("av"); stopLocate(); $("rjobs").textContent = ""; stopGeo(); }
 }
 startAuth(function(u){
   rid = null; loaded = false;
@@ -156,7 +159,7 @@ $("rredo").addEventListener("submit", function(e){
 function watchRider(){
   if (unsubs.rider) return;
   var box = $("rjobs");
-  unsubs.rider = col.where("riderEmail", "==", user.email.toLowerCase()).onSnapshot(function(sn){ draw(box, sn, "rider", "No jobs for you right now."); trackJobs(sn); }, fail(box));
+  unsubs.rider = col.where("riderEmail", "==", user.email.toLowerCase()).onSnapshot(function(sn){ draw(box, sn, "rider", "No active job. Pick a booking below."); trackJobs(sn); }, fail(box));
 }
 // ---- live location (shared only while a job is active) ----
 var geo = null, jobs = [], last = { t: 0, lat: 0, lng: 0 };
@@ -166,6 +169,7 @@ function trackJobs(sn){
   if (jobs.length && geo === null && navigator.geolocation){
     geo = navigator.geolocation.watchPosition(onPos, function(){ $("gps").textContent = "Turn on your phone location so customers can see you."; }, { enableHighAccuracy: true, maximumAge: 5000 });
   }
+  busy = jobs.length > 0; renderAvail();
   if (!jobs.length) stopGeo();
   else if (!$("gps").textContent) $("gps").textContent = "Sharing your live location with your customers.";
 }
@@ -186,9 +190,99 @@ function go(t){
 document.querySelectorAll("#tabs button").forEach(function(b){ b.onclick = function(){ go(b.dataset.t); }; });
 $("out2").onclick = function(){ auth.signOut(); };
 
+
+// ---- available bookings: riders choose freely, nearest pickup first ----
+var busy = false, pos = null, gpsState = "ask", locW = null, availDocs = [], filt = { pu: 0, tot: 0 };
+function startLocate(){
+  if (locW !== null) return;
+  if (!navigator.geolocation){ gpsState = "none"; renderAvail(); return; }
+  gpsState = "ask"; renderAvail();
+  locW = navigator.geolocation.watchPosition(function(p){
+    pos = { lat: p.coords.latitude, lng: p.coords.longitude }; gpsState = "ok"; renderAvail();
+  }, function(e){
+    gpsState = e && e.code === 1 ? "denied" : "off"; pos = null;
+    if (locW !== null){ navigator.geolocation.clearWatch(locW); locW = null; }
+    renderAvail();
+  }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+}
+function stopLocate(){ if (locW !== null){ navigator.geolocation.clearWatch(locW); locW = null; } pos = null; gpsState = "ask"; availDocs = []; if ($("ravail")) $("ravail").textContent = ""; }
+function watchAvail(){
+  if (unsubs.av) return;
+  unsubs.av = col.where("status", "==", "new").onSnapshot(function(sn){ availDocs = []; sn.forEach(function(d){ availDocs.push(d); }); renderAvail(); },
+    function(){ var b = $("ravail"); b.textContent = "Could not load bookings. Check your internet and Firebase rules."; b.className = "box err"; });
+}
+function kmBetween(a, b, c, d){
+  var R = 6371, t = Math.PI / 180, dl = (c - a) * t, dg = (d - b) * t;
+  var x = Math.sin(dl / 2) * Math.sin(dl / 2) + Math.cos(a * t) * Math.cos(c * t) * Math.sin(dg / 2) * Math.sin(dg / 2);
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+function chipRow(title, opts, key){
+  var w = el("div"); w.appendChild(el("p", title, "hint")); var row = el("div", null, "chips"); row.style.gridTemplateColumns = "repeat(4,1fr)";
+  opts.forEach(function(v){
+    var b = el("button", v ? v + " km" : "Any", "chipa"); b.type = "button"; if (filt[key] === v) b.classList.add("on");
+    b.onclick = function(){ filt[key] = v; drawFilters(); renderAvail(); }; row.appendChild(b);
+  });
+  w.appendChild(row); return w;
+}
+function drawFilters(){
+  var f = $("avfilt"); f.textContent = "";
+  f.appendChild(chipRow("Distance to pick-up within", [0, 2, 5, 10], "pu"));
+  f.appendChild(chipRow("Trip distance within", [0, 5, 10, 20], "tot"));
+}
+function renderAvail(){
+  var box = $("ravail"), fl = $("avfilt"); if (!box || !user || !rid || rid.status !== "approved") return;
+  box.textContent = ""; box.className = "";
+  if (bal() < CONFIG.minBalance){ fl.classList.add("hide"); box.appendChild(el("p", "Top up your wallet to " + peso(CONFIG.minBalance) + " or more to see and accept bookings.", "box hint")); return; }
+  if (gpsState !== "ok"){
+    fl.classList.add("hide");
+    var g = el("div", null, "box");
+    g.appendChild(el("b", "Turn on your location (GPS)"));
+    g.appendChild(el("p", gpsState === "denied" ? "Location is blocked. Allow location for this app in your phone settings, then tap Try again." : gpsState === "none" ? "This phone or browser does not support location, so bookings cannot be shown." : gpsState === "off" ? "We could not find your location. Switch on GPS in your phone, then tap Try again." : "Allow location when your phone asks. We use it to show the closest pickups first.", "hint"));
+    if (gpsState !== "none"){ var t = el("button", "Try again", "sm"); t.type = "button"; t.onclick = function(){ gpsState = "ask"; startLocate(); }; g.appendChild(t); }
+    box.appendChild(g); return;
+  }
+  if (!fl.firstChild) drawFilters();
+  fl.classList.remove("hide");
+  var list = [];
+  availDocs.forEach(function(d){
+    var b = d.data(), has = typeof b.puLat === "number" && typeof b.puLng === "number";
+    var dist = has ? kmBetween(pos.lat, pos.lng, b.puLat, b.puLng) : null;
+    if (filt.pu && (dist === null || dist > filt.pu)) return;
+    if (filt.tot && !(b.km <= filt.tot)) return;
+    list.push({ d: d, b: b, dist: dist });
+  });
+  list.sort(function(x, y){ return (x.dist === null ? 1e9 : x.dist) - (y.dist === null ? 1e9 : y.dist); });
+  if (busy) box.appendChild(el("p", "Finish your current job to accept another one.", "box hint"));
+  list.forEach(function(it, i){
+    var b = it.b, c = el("div", null, "box job"), fe = fee(b.fare);
+    var top = el("div"); top.style.cssText = "display:flex;justify-content:space-between;align-items:baseline;gap:8px";
+    top.appendChild(el("b", peso(b.fare))); top.appendChild(el("span", it.dist === null ? "distance unknown" : (it.dist < 1 ? Math.round(it.dist * 1000) + " m" : it.dist.toFixed(1) + " km") + " to pickup" + (i === 0 ? " · nearest" : ""), "st"));
+    c.appendChild(top);
+    c.appendChild(el("p", "Pickup: " + b.pickup)); c.appendChild(el("p", "Drop-off: " + b.dropoff));
+    c.appendChild(el("p", (b.km ? b.km + " km trip · " : "") + b.size + " · " + b.pay + " · You earn about " + peso(b.fare - fe) + " after the " + peso(fe) + " platform fee", "hint"));
+    var a = el("button", "Accept booking", "sm"); a.type = "button"; a.disabled = busy;
+    a.onclick = function(){ acceptJob(it.d, a); }; c.appendChild(a); box.appendChild(c);
+  });
+  if (!list.length) box.appendChild(el("p", availDocs.length ? "No bookings match your filters." : "No bookings waiting right now. New ones appear here automatically.", "box hint"));
+}
+function acceptJob(d, btn){
+  if (busy || bal() < CONFIG.minBalance) return;
+  btn.disabled = true; btn.textContent = "Accepting…";
+  db.runTransaction(function(tx){
+    return tx.get(d.ref).then(function(s){
+      var b = s.data(); if (!b || b.status !== "new" || b.riderEmail) throw new Error("taken");
+      tx.update(d.ref, { status: "assigned", riderEmail: user.email.toLowerCase(), riderName: rid.name, riderPhone: rid.phone, riderGcash: rid.gcash || "" });
+    });
+  }).catch(function(e){
+    btn.disabled = false; btn.textContent = "Accept booking";
+    alert(e && e.message === "taken" ? "Sorry, another rider just took this booking." : "Could not accept this booking. Check your wallet balance and internet, then try again.");
+  });
+}
+
 // ---- wallet ----
 function bal(){ return (rid && rid.wallet) || 0; }
 function drawWallet(){
+  renderAvail();
   var b = bal(), low = b < CONFIG.minBalance;
   $("bal").textContent = peso(b); $("bal").classList.toggle("low", low);
   $("balnote").textContent = low ? "Top up at least " + peso(CONFIG.minBalance - Math.max(0, b)) + " more to get jobs." : "You can get jobs. Your fee comes off this balance after each delivery.";
